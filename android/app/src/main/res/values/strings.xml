@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">DoIHaveIt</string>
+    <string name="title_activity_main">DoIHaveIt</string>
+    <string name="package_name">com.hris.doihaveit</string>
+    <string name="custom_url_scheme">com.hris.doihaveit</string>
+</resources>

@@ -75,61 +75,6 @@ h1 {
   margin: 0 0 8px;
 }
 
-#collections-summary {
-  color: var(--muted);
-  margin: 0 0 24px;
-  font-size: 14px;
-}
-
-#screen-message {
-  color: var(--muted);
-}
-
-#collections-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.collection-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 17px 12px 17px 16px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 18px;
-}
-
-.collection-symbol {
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  background: var(--soft);
-  color: var(--accent);
-  border-radius: 13px;
-  flex-shrink: 0;
-}
-
-.collection-details {
-  flex: 1;
-  min-width: 0;
-}
-
-.collection-name {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
-.collection-date {
-  margin: 3px 0 0;
-  font-size: 12px;
-  color: var(--muted);
-}
-
 button, input {
   font: inherit;
 }
@@ -144,27 +89,6 @@ button:disabled {
   cursor: default;
 }
 
-.delete-button {
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  display: grid;
-  place-items: center;
-  width: 44px;
-  border-radius: 12px;
-  flex-shrink: 0;
-}
-
-.delete-button:hover {
-  color: var(--danger);
-  background: var(--background);
-}
-
-.collections-footer {
-  margin-top: auto;
-  padding-top: 28px;
-}
-
 .primary-button, .secondary-button, .danger-button {
   border: 1px solid transparent;
   border-radius: 15px;
@@ -177,14 +101,6 @@ button:disabled {
   color: var(--accent-text);
 }
 
-#new-collection {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  width: 100%;
-}
-
 .secondary-button {
   background: var(--surface);
   color: var(--text);
@@ -194,28 +110,6 @@ button:disabled {
 .danger-button {
   background: var(--danger);
   color: var(--danger-text);
-}
-
-#empty-state {
-  padding: 42px 10px;
-  text-align: center;
-}
-
-#empty-state > svg {
-  color: var(--accent);
-  width: 32px;
-  height: 32px;
-}
-
-#empty-state h2 {
-  font-size: 21px;
-  font-weight: 500;
-  margin: 14px 0 8px;
-}
-
-#empty-state p {
-  color: var(--muted);
-  margin: 0;
 }
 
 /* Keep modal forms above the app and within the keyboard's available space */
@@ -267,13 +161,6 @@ dialog::backdrop {
   font-size: 16px;
 }
 
-#delete-description {
-  color: var(--muted);
-  margin: 0 0 20px;
-  font-size: 14px;
-  overflow-wrap: anywhere;
-}
-
 .sheet-actions {
   display: flex;
   gap: 10px;
@@ -296,6 +183,13 @@ dialog::backdrop {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+
+#screen-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
 }
 
 @media (max-width: 360px) {

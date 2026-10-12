@@ -1,0 +1,58 @@
+<section class="collections-screen" aria-label="Collections">
+  <header class="collections-header">
+    <h1>Collections</h1>
+    <p id="collections-summary">Everything in its place</p>
+  </header>
+
+  <p id="screen-message" role="status">Loading collections…</p>
+  <p id="screen-error" class="error" role="alert" hidden></p>
+  <div id="collections-list" aria-label="Your collections"></div>
+  <section id="empty-state" hidden>
+    <svg aria-hidden="true"><use href="#icon-folder" /></svg>
+    <h2>A place for your things</h2>
+    <p>Create your first collection.</p>
+  </section>
+
+  <footer class="collections-footer">
+    <button id="new-collection" class="primary-button" type="button" disabled>
+      <svg aria-hidden="true"><use href="#icon-plus" /></svg>New collection
+    </button>
+  </footer>
+
+  <dialog id="add-dialog" aria-labelledby="add-title">
+    <form id="add-form" class="sheet">
+      <h2 id="add-title">New collection</h2>
+      <label for="collection-name">Collection name</label>
+      <input id="collection-name" name="name" placeholder="e.g. Camping gear" autocomplete="off" required />
+      <p id="add-error" class="error" role="alert" hidden></p>
+      <div class="sheet-actions">
+        <button type="button" class="secondary-button" data-close="add-dialog">Cancel</button>
+        <button type="submit" class="primary-button">Create collection</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description">
+    <form id="delete-form" class="sheet">
+      <h2 id="delete-title">Delete collection?</h2>
+      <p id="delete-description"></p>
+      <p id="delete-error" class="error" role="alert" hidden></p>
+      <div class="sheet-actions">
+        <button type="button" class="secondary-button" data-close="delete-dialog" autofocus>Keep collection</button>
+        <button type="submit" class="danger-button">Delete</button>
+      </div>
+    </form>
+  </dialog>
+
+  <template id="collection-template">
+    <article class="collection-card">
+      <div class="collection-symbol"><svg aria-hidden="true"><use href="#icon-folder" /></svg></div>
+      <div class="collection-details">
+        <h2 class="collection-name"></h2>
+        <p class="collection-date"></p>
+      </div>
+      <button class="delete-button" type="button"><svg aria-hidden="true"><use href="#icon-trash" /></svg></button>
+    </article>
+  </template>
+
+</section>

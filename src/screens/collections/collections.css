@@ -1,0 +1,119 @@
+.collections-screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.collections-screen #collections-summary {
+  color: var(--muted);
+  margin: 0 0 24px;
+  font-size: 14px;
+}
+
+.collections-screen #screen-message {
+  color: var(--muted);
+}
+
+.collections-screen #collections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.collections-screen .collection-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 17px 12px 17px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+.collections-screen .collection-symbol {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  background: var(--soft);
+  color: var(--accent);
+  border-radius: 13px;
+  flex-shrink: 0;
+}
+
+.collections-screen .collection-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.collections-screen .collection-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.collections-screen .collection-date {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.collections-screen .delete-button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.collections-screen .delete-button:hover {
+  color: var(--danger);
+  background: var(--background);
+}
+
+.collections-screen .collections-footer {
+  margin-top: auto;
+  padding-top: 28px;
+}
+
+.collections-screen #new-collection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+}
+
+.collections-screen #empty-state {
+  padding: 42px 10px;
+  text-align: center;
+}
+
+.collections-screen #empty-state > svg {
+  color: var(--accent);
+  width: 32px;
+  height: 32px;
+}
+
+.collections-screen #empty-state h2 {
+  font-size: 21px;
+  font-weight: 500;
+  margin: 14px 0 8px;
+}
+
+.collections-screen #empty-state p {
+  color: var(--muted);
+  margin: 0;
+}
+
+.collections-screen #delete-description {
+  color: var(--muted);
+  margin: 0 0 20px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}

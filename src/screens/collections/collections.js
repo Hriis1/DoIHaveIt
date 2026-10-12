@@ -146,6 +146,23 @@ export function mountCollectionsScreen(container, { isNative, databaseReady }) {
   })
 
   screen.querySelectorAll('dialog').forEach(dialog => {
+    let startedOutside = false
+    const isOutside = event => {
+      const bounds = dialog.getBoundingClientRect()
+      return event.clientX < bounds.left || event.clientX > bounds.right ||
+        event.clientY < bounds.top || event.clientY > bounds.bottom
+    }
+
+    // Treat backdrop taps as cancellation without closing on drags from inside
+    listen(dialog, 'pointerdown', event => {
+      startedOutside = event.target === dialog && isOutside(event)
+    })
+    listen(dialog, 'click', event => {
+      if (!busy && startedOutside && event.target === dialog && isOutside(event)) {
+        dialog.close()
+      }
+      startedOutside = false
+    })
     listen(dialog, 'cancel', event => {
       if (busy) event.preventDefault()
     })

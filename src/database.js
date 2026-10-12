@@ -25,13 +25,40 @@ async function openDatabase() {
 
   await database.open()
 
+  // Enforce foreign keys outside the schema transaction
+  await database.execute('PRAGMA foreign_keys = ON;', false)
+
   // Create the initial tables without replacing existing data
   await database.execute(`
     CREATE TABLE IF NOT EXISTS collections (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      name VARCHAR(255) NOT NULL UNIQUE,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS products (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      brand VARCHAR(255) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      size VARCHAR(255),
+      image VARCHAR(255) NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS codes (
+      code VARCHAR(255) PRIMARY KEY NOT NULL,
+      product_id INTEGER NOT NULL REFERENCES products(id),
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      collection_id INTEGER NOT NULL REFERENCES collections(id),
+      product_id INTEGER NOT NULL REFERENCES products(id),
+      image VARCHAR(255),
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `)
 

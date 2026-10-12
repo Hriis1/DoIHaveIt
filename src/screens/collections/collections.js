@@ -1,6 +1,6 @@
 import './collections.css'
 import html from './collections.html?raw'
-import { getCollections, addCollection, deleteCollection } from '../../database.js'
+import { getCollections, addCollection, deleteCollection } from '../../repositories/collectionRepo.js'
 
 export function mountCollectionsScreen(container, { isNative, databaseReady }) {
   container.innerHTML = html

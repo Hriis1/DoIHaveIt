@@ -46,11 +46,13 @@
 
   <template id="collection-template">
     <article class="collection-card">
-      <div class="collection-symbol"><svg aria-hidden="true"><use href="#icon-folder" /></svg></div>
-      <div class="collection-details">
-        <h2 class="collection-name"></h2>
-        <p class="collection-date"></p>
-      </div>
+      <button class="collection-open" type="button">
+        <span class="collection-symbol"><svg aria-hidden="true"><use href="#icon-folder" /></svg></span>
+        <span class="collection-details">
+          <span class="collection-name"></span>
+          <span class="collection-date"></span>
+        </span>
+      </button>
       <button class="delete-button" type="button"><svg aria-hidden="true"><use href="#icon-trash" /></svg></button>
     </article>
   </template>

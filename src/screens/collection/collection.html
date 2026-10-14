@@ -1,0 +1,41 @@
+<section class="collection-screen" aria-labelledby="collection-title">
+  <button class="collection-back" type="button"><svg aria-hidden="true"><use href="#icon-arrow-left" /></svg>Collections</button>
+  <header class="gallery-heading">
+    <h1 id="collection-title"></h1>
+    <p class="gallery-count"></p>
+  </header>
+
+  <div class="gallery-search">
+    <svg aria-hidden="true"><use href="#icon-search" /></svg>
+    <label for="item-search" class="gallery-sr">Search items</label>
+    <input id="item-search" type="search" placeholder="Search in this collection" autocomplete="off" />
+  </div>
+
+  <p class="gallery-message" role="status">Loading items…</p>
+  <p class="gallery-error error" role="alert" hidden></p>
+  <div class="item-gallery" aria-label="Collection items" aria-busy="true"></div>
+  <section class="gallery-empty" hidden>
+    <svg aria-hidden="true"><use href="#icon-image" /></svg>
+    <h2></h2>
+    <p></p>
+  </section>
+
+  <footer class="gallery-footer">
+    <nav class="gallery-pagination" aria-label="Item pages">
+      <button class="gallery-previous secondary-button" type="button" aria-label="Previous page" disabled><svg aria-hidden="true"><use href="#icon-chevron-left" /></svg></button>
+      <span class="gallery-page" role="status" aria-live="polite"></span>
+      <button class="gallery-next secondary-button" type="button" aria-label="Next page" disabled><svg aria-hidden="true"><use href="#icon-chevron-right" /></svg></button>
+    </nav>
+    <p class="gallery-range"></p>
+    <button class="gallery-scan primary-button" type="button"><svg aria-hidden="true"><use href="#icon-scan" /></svg>Scan and add</button>
+  </footer>
+
+  <template class="item-template">
+    <figure class="gallery-item">
+      <div class="item-image">
+        <span class="image-placeholder"><svg aria-hidden="true"><use href="#icon-image" /></svg></span>
+      </div>
+      <figcaption class="item-label"></figcaption>
+    </figure>
+  </template>
+</section>

@@ -1,0 +1,229 @@
+#app[data-screen="collection"] .brand {
+  margin-bottom: 10px;
+}
+
+.collection-screen {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.collection-screen .collection-back {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.collection-screen .gallery-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 2px 0 14px;
+}
+
+.collection-screen h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.collection-screen .gallery-count {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.collection-screen .gallery-search {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.collection-screen .gallery-search > svg {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.collection-screen input {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 12px 12px 12px 42px;
+  font-size: 16px;
+}
+
+.collection-screen input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+  font-size: 13px;
+}
+
+.collection-screen .gallery-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.collection-screen .item-gallery {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 8px;
+  align-content: start;
+}
+
+.collection-screen .gallery-item {
+  min-width: 0;
+  margin: 0;
+}
+
+.collection-screen .item-image {
+  position: relative;
+  aspect-ratio: 1.18;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.collection-screen .item-image img {
+  width: 100%;
+  height: 100%;
+  padding: 5px;
+  display: block;
+  object-fit: contain;
+}
+
+.collection-screen .image-placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.collection-screen .item-label {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  min-height: 3.9em;
+  margin: 6px 1px 0;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.collection-screen .gallery-footer {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.collection-screen .gallery-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.collection-screen .gallery-pagination button {
+  min-width: 44px;
+  padding: 10px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+}
+
+.collection-screen .gallery-page {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.collection-screen .gallery-range {
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 6px 0 14px;
+}
+
+.collection-screen .gallery-scan {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.collection-screen .gallery-message {
+  color: var(--muted);
+}
+
+.collection-screen .gallery-empty {
+  text-align: center;
+  padding: 40px 8px;
+}
+
+.collection-screen .gallery-empty > svg {
+  color: var(--accent);
+  width: 28px;
+  height: 28px;
+}
+
+.collection-screen .gallery-empty h2 {
+  font-size: 20px;
+  font-weight: 500;
+  margin: 14px 0 8px;
+}
+
+.collection-screen .gallery-empty p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+@media (max-height: 740px) {
+  #app[data-screen="collection"] {
+    padding-top: calc(16px + env(safe-area-inset-top));
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .collection-screen .item-image {
+    aspect-ratio: 1.5;
+  }
+
+  .collection-screen .gallery-heading {
+    margin-bottom: 10px;
+  }
+
+  .collection-screen .gallery-search {
+    margin-bottom: 12px;
+  }
+
+  .collection-screen .item-gallery {
+    row-gap: 8px;
+  }
+
+  .collection-screen .gallery-footer {
+    padding-top: 10px;
+  }
+
+  .collection-screen .gallery-range {
+    margin: 4px 0 10px;
+  }
+}

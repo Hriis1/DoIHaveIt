@@ -2,7 +2,7 @@ import './collections.css'
 import html from './collections.html?raw'
 import { getCollections, addCollection, deleteCollection } from '../../repositories/collectionRepo.js'
 
-export function mountCollectionsScreen(container, { isNative, databaseReady }) {
+export function mountCollectionsScreen(container, { isNative, databaseReady, navigate }) {
   container.innerHTML = html
   const screen = container.querySelector('.collections-screen')
   const events = new AbortController()
@@ -59,6 +59,9 @@ export function mountCollectionsScreen(container, { isNative, databaseReady }) {
         const card = template.content.cloneNode(true)
         card.querySelector('.collection-name').textContent = collection.name
         card.querySelector('.collection-date').textContent = formatCreatedAt(collection.created_at)
+        const openButton = card.querySelector('.collection-open')
+        openButton.setAttribute('aria-label', `Open ${collection.name}`)
+        listen(openButton, 'click', () => navigate('collection', { collection }))
         const deleteButton = card.querySelector('.delete-button')
         deleteButton.setAttribute('aria-label', `Delete ${collection.name}`)
         listen(deleteButton, 'click', () => {

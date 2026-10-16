@@ -1,0 +1,88 @@
+/* Reveal the native camera underneath the WebView */
+html.scan-active,
+html.scan-active body {
+  background: transparent !important;
+}
+
+html.scan-active body {
+  visibility: hidden;
+  overflow: hidden;
+}
+
+dialog.scan-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: transparent;
+  color: #fff;
+  visibility: visible;
+}
+
+.scan-overlay::backdrop {
+  background: transparent;
+}
+
+.scan-overlay .scan-close {
+  position: absolute;
+  z-index: 1;
+  top: calc(16px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #ffffff66;
+  border-radius: 50%;
+  background: #0009;
+  color: #fff;
+}
+
+.scan-overlay .scan-highlight {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.scan-overlay polygon {
+  fill: #a8d2b526;
+  stroke: #a8d2b5;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.scan-overlay .scan-controls {
+  position: absolute;
+  left: calc(22px + env(safe-area-inset-left));
+  right: calc(22px + env(safe-area-inset-right));
+  bottom: calc(24px + env(safe-area-inset-bottom));
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.scan-overlay .scan-status {
+  max-width: 100%;
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: #000b;
+  text-align: center;
+  font-size: 14px;
+}
+
+.scan-overlay .scan-confirm {
+  width: 100%;
+  max-width: 320px;
+  background: #a8d2b5;
+  color: #14271b;
+}

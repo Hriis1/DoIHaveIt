@@ -3,6 +3,7 @@ import html from './collection.html?raw'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getCollectionItems } from '../../repositories/itemRepo.js'
+import { createScanner } from '../../modules/scan/scan.js'
 
 const pageSize = 12
 
@@ -27,6 +28,14 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   let request = 0
   let page = 1
   let collectionTotal
+  const scanner = createScanner({
+    onScan: value => { if (active) search.value = value },
+    onError: message => {
+      if (!active) return
+      error.textContent = message
+      error.hidden = false
+    },
+  })
 
   title.textContent = collection.name
   listen(screen.querySelector('.collection-back'), 'click', () => navigate('collections'))
@@ -113,6 +122,10 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   }
 
   listen(search, 'input', () => { page = 1; loadItems() })
+  listen(screen.querySelector('.gallery-scan'), 'click', () => {
+    error.hidden = true
+    scanner.open()
+  })
   listen(previous, 'click', () => { page--; loadItems() })
   listen(next, 'click', () => { page++; loadItems() })
 
@@ -126,6 +139,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   return () => {
     active = false
     events.abort()
+    void scanner.destroy()
     screen.remove()
   }
 }

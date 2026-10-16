@@ -10,8 +10,8 @@ export function createScanner({ onScan, onError }) {
   function clearSelection(session) {
     clearTimeout(session.expiry)
     session.selected = undefined
-    session.polygon.setAttribute('hidden', '')
     session.confirm.hidden = true
+    session.status.hidden = false
     session.status.textContent = 'Point the camera at a barcode'
   }
 
@@ -34,7 +34,7 @@ export function createScanner({ onScan, onError }) {
       if (x < 0 || x > width || y < 0 || y > height) continue
       const distance = (x - width / 2) ** 2 + (y - height / 2) ** 2
       if (distance < nearestDistance) {
-        nearest = { value, points }
+        nearest = { value }
         nearestDistance = distance
       }
     }
@@ -44,9 +44,7 @@ export function createScanner({ onScan, onError }) {
     }
     clearTimeout(session.expiry)
     session.selected = nearest.value
-    session.polygon.setAttribute('points', nearest.points.map(point => point.join(',')).join(' '))
-    session.polygon.removeAttribute('hidden')
-    if (session.confirm.hidden) session.status.textContent = 'Barcode detected. Tap Scan to confirm.'
+    session.status.hidden = true
     session.confirm.hidden = false
     // The native plugin may not emit an empty result when the barcode leaves view
     session.expiry = setTimeout(() => clearSelection(session), 600)
@@ -119,7 +117,6 @@ export function createScanner({ onScan, onError }) {
     const overlay = template.content.firstElementChild
     const session = {
       overlay,
-      polygon: overlay.querySelector('polygon'),
       confirm: overlay.querySelector('.scan-confirm'),
       status: overlay.querySelector('.scan-status'),
       events: new AbortController(),

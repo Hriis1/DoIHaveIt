@@ -29,3 +29,6 @@ Desktop.ini
 *.njsproj
 *.sln
 *.sw?
+
+#data
+data/

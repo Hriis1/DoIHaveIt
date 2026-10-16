@@ -43,11 +43,35 @@ class ExtractProductsTests(unittest.TestCase):
                 stream.write("invalid json\n")
             with contextlib.redirect_stdout(io.StringIO()):
                 summary = extract(source, output)
-            self.assertEqual(summary["counts"], {"read": 3, "kept": 1, "missing_required": 1, "invalid_json": 1, "with_size": 0, "with_image": 0})
+            self.assertEqual(summary["counts"], {"read": 3, "kept": 1, "missing_required": 1, "invalid_json": 1, "duplicates": 0, "with_size": 0, "with_image": 0})
             self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["barcode"], "00123")
             self.assertFalse(output.with_name(output.name + ".partial").exists())
             with self.assertRaises(FileExistsError):
                 extract(source, output)
+
+    def test_duplicate_barcodes_keep_first_qualifying_record(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "source.jsonl.gz"
+            output = Path(folder) / "products.jsonl"
+            first = {"code": "00123", "brands": "Brand", "product_name": "First product"}
+            records = [
+                {"code": "00999", "brands": "Brand"},
+                first,
+                {**first, "product_name": "Later product", "quantity": "1 L", "image_url": "https://example.com/image.jpg"},
+                {**first, "code": "123"},
+                {**first, "code": "00999", "product_name": "Complete product"},
+                first,
+            ]
+            with gzip.open(source, "wt", encoding="utf-8") as stream:
+                for record in records:
+                    stream.write(json.dumps(record) + "\n")
+            with contextlib.redirect_stdout(io.StringIO()):
+                summary = extract(source, output)
+            products = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([product["barcode"] for product in products], ["00123", "123", "00999"])
+            self.assertEqual(products[0], get_product(first))
+            self.assertEqual(products[2]["name"], "Complete product")
+            self.assertEqual(summary["counts"], {"read": 6, "kept": 3, "missing_required": 1, "invalid_json": 0, "duplicates": 2, "with_size": 0, "with_image": 0})
 
 
 if __name__ == "__main__":

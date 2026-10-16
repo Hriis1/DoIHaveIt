@@ -101,7 +101,8 @@ def extract(source, output):
     started = time.monotonic()
     started_at = datetime.now(timezone.utc).isoformat()
     total_bytes = source.stat().st_size
-    counts = {"read": 0, "kept": 0, "missing_required": 0, "invalid_json": 0, "with_size": 0, "with_image": 0}
+    counts = {"read": 0, "kept": 0, "missing_required": 0, "invalid_json": 0, "duplicates": 0, "with_size": 0, "with_image": 0}
+    seen_barcodes = set()
     last_progress = started
 
     # Process one compressed JSONL record at a time, verifying gzip integrity at EOF
@@ -119,8 +120,12 @@ def extract(source, output):
             compact = get_product(product)
             if compact is None:
                 counts["missing_required"] += 1
+            elif compact["barcode"] in seen_barcodes:
+                counts["duplicates"] += 1
             else:
+                # Keep the first qualifying record for each barcode
                 destination.write(json.dumps(compact, ensure_ascii=False, separators=(",", ":")) + "\n")
+                seen_barcodes.add(compact["barcode"])
                 counts["kept"] += 1
                 counts["with_size"] += compact["size"] is not None
                 counts["with_image"] += compact["image_url"] is not None
@@ -149,7 +154,7 @@ def extract(source, output):
             "International coverage; no country filter.",
             "Missing sizes and images are null. Original product names and languages are retained.",
             "Image URLs come from supplied URLs or selected-front-image metadata; images were not downloaded or checked online.",
-            "No barcode deduplication or database import was performed.",
+            "The first qualifying record for each barcode is retained; later duplicates are skipped. No database import was performed.",
         ],
     }
     with report_path.open("x", encoding="utf-8") as report:

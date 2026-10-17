@@ -8,21 +8,12 @@ export function mountCatalogsScreen(container) {
   const listen = (element, event, handler) => element.addEventListener(event, handler, { signal: events.signal })
   const expand = screen.querySelector('.catalog-expand')
   const description = screen.querySelector('.catalog-description')
-  const download = screen.querySelector('.catalog-download')
   const helpDialog = screen.querySelector('.catalogs-help-dialog')
-  let highlightTimeout
 
   listen(expand, 'click', () => {
     const expanded = expand.getAttribute('aria-expanded') !== 'true'
     expand.setAttribute('aria-expanded', String(expanded))
     description.hidden = !expanded
-  })
-
-  // Acknowledge clicks
-  listen(download, 'click', () => {
-    clearTimeout(highlightTimeout)
-    download.classList.add('is-clicked')
-    highlightTimeout = setTimeout(() => download.classList.remove('is-clicked'), 600)
   })
 
   listen(screen.querySelector('.catalogs-help'), 'click', () => helpDialog.showModal())
@@ -46,7 +37,6 @@ export function mountCatalogsScreen(container) {
 
   return () => {
     events.abort()
-    clearTimeout(highlightTimeout)
     helpDialog.close()
     screen.remove()
   }

@@ -49,6 +49,7 @@
 }
 
 .catalogs-screen .catalog-expand {
+  -webkit-tap-highlight-color: transparent;
   display: flex;
   align-items: center;
   flex: 1;
@@ -93,6 +94,7 @@
 }
 
 .catalogs-screen .catalog-download {
+  -webkit-tap-highlight-color: transparent;
   display: grid;
   place-items: center;
   width: 44px;
@@ -105,9 +107,8 @@
   color: var(--accent);
 }
 
-.catalogs-screen .catalog-download.is-clicked {
-  background: var(--accent);
-  color: var(--accent-text);
+.catalogs-screen .catalog-download:active {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .catalogs-screen .catalog-description {

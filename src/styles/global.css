@@ -57,6 +57,14 @@ svg {
   overflow: hidden;
 }
 
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 30px;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -64,7 +72,59 @@ svg {
   font-size: 13px;
   font-weight: 500;
   color: var(--accent);
-  margin-bottom: 30px;
+}
+
+.app-menu {
+  position: relative;
+}
+
+.app-menu > summary {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  list-style: none;
+}
+
+.app-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.app-menu[open] > summary {
+  background: var(--soft);
+}
+
+.app-menu-dropdown {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px #0002;
+}
+
+.app-menu-dropdown button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.app-menu-dropdown button:hover,
+.app-menu-dropdown button:focus-visible {
+  background: var(--soft);
 }
 
 h1 {

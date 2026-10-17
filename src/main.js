@@ -42,4 +42,6 @@ export function showScreen(name, parameters = {}) {
   window.scrollTo(0, 0)
 }
 
+document.querySelector('.brand').addEventListener('click', () => showScreen('collections'))
+
 showScreen('collections')

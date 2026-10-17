@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 import gzip
 import json
 from pathlib import Path
-import re
 import time
 
 
@@ -31,46 +30,6 @@ def get_name(product):
     return ""
 
 
-def get_image_url(product, barcode):
-    # Use supplied front-image URLs when the export includes them
-    selected = product.get("selected_images") or {}
-    front = selected.get("front", {})
-    for size in ("display", "small", "thumb"):
-        urls = front.get(size, {})
-        if not isinstance(urls, dict):
-            continue
-        for language in get_languages(product, urls):
-            url = get_text(urls.get(language))
-            if url.startswith("https://"):
-                return url
-    for field in ("image_front_url", "image_url", "image_front_small_url"):
-        url = get_text(product.get(field))
-        if url.startswith("https://"):
-            return url
-
-    # Dumps store selected-image revisions instead of computed URLs
-    images = product.get("images") or {}
-    fronts = dict((images.get("selected") or {}).get("front") or {})
-    for key, image in images.items():
-        if key.startswith("front_"):
-            fronts.setdefault(key[6:], image)
-    if not re.fullmatch(r"[0-9]+", barcode):
-        return None
-    folder = barcode if len(barcode) <= 8 else f"{barcode[:3]}/{barcode[3:6]}/{barcode[6:9]}/{barcode[9:]}"
-    for language in get_languages(product, fronts):
-        image = fronts.get(language)
-        if not isinstance(image, dict) or not re.fullmatch(r"[a-z]{2,3}", language):
-            continue
-        revision = str(image.get("rev", ""))
-        if not revision.isdigit():
-            continue
-        sizes = image.get("sizes") or {}
-        size = next((value for value in ("400", "200", "100", "full") if value in sizes), None)
-        if size:
-            return f"https://images.openfoodfacts.org/images/products/{folder}/front_{language}.{revision}.{size}.jpg"
-    return None
-
-
 def get_product(product):
     # Require identifying fields without inventing missing brand or product names
     barcode = get_text(product.get("code"))
@@ -83,7 +42,6 @@ def get_product(product):
         "brand": brand,
         "name": name,
         "size": get_text(product.get("quantity")) or None,
-        "image_url": get_image_url(product, barcode),
     }
 
 
@@ -101,7 +59,7 @@ def extract(source, output):
     started = time.monotonic()
     started_at = datetime.now(timezone.utc).isoformat()
     total_bytes = source.stat().st_size
-    counts = {"read": 0, "kept": 0, "missing_required": 0, "invalid_json": 0, "duplicates": 0, "with_size": 0, "with_image": 0}
+    counts = {"read": 0, "kept": 0, "missing_required": 0, "invalid_json": 0, "duplicates": 0, "with_size": 0}
     seen_barcodes = set()
     last_progress = started
 
@@ -128,7 +86,6 @@ def extract(source, output):
                 seen_barcodes.add(compact["barcode"])
                 counts["kept"] += 1
                 counts["with_size"] += compact["size"] is not None
-                counts["with_image"] += compact["image_url"] is not None
             now = time.monotonic()
             if now - last_progress >= 10:
                 print(f"{compressed.tell() / total_bytes:.1%} read | {counts['read']:,} records | {counts['kept']:,} kept | {now - started:.0f}s", flush=True)
@@ -148,12 +105,10 @@ def extract(source, output):
         "attribution": "Open Food Facts contributors",
         "source_url": "https://static.openfoodfacts.org/data/openfoodfacts-products.jsonl.gz",
         "database_license": "ODbL-1.0",
-        "image_license": "CC-BY-SA; see the source licensing guidance",
         "license_url": "https://openfoodfacts.github.io/documentation/docs/Product-Opener/api/tutorials/license-be-on-the-legal-side/",
         "notes": [
             "International coverage; no country filter.",
-            "Missing sizes and images are null. Original product names and languages are retained.",
-            "Image URLs come from supplied URLs or selected-front-image metadata; images were not downloaded or checked online.",
+            "Missing sizes are null. Original product names and languages are retained.",
             "The first qualifying record for each barcode is retained; later duplicates are skipped. No database import was performed.",
         ],
     }

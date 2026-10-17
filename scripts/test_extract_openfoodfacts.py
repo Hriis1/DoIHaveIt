@@ -12,25 +12,23 @@ from extract_openfoodfacts import extract, get_product
 class ExtractProductsTests(unittest.TestCase):
     def test_preserves_strings_and_optional_fields(self):
         product = get_product({"code": "0012345678905", "brands": " Brand ", "product_name": "Сок"})
-        self.assertEqual(product, {"barcode": "0012345678905", "brand": "Brand", "name": "Сок", "size": None, "image_url": None})
+        self.assertEqual(product, {"barcode": "0012345678905", "brand": "Brand", "name": "Сок", "size": None})
         self.assertIsNone(get_product({"code": "001", "product_name": "Juice"}))
 
-    def test_localized_names_and_modern_image_metadata(self):
+    def test_localized_names_and_size(self):
         product = get_product({
             "code": "0000101209159", "brands": "Bovetti", "lang": "fr", "product_name_fr": "Chocolat", "quantity": "350 g",
-            "images": {"selected": {"front": {"fr": {"rev": "4", "sizes": {"400": {}}}}}},
         })
         self.assertEqual(product["name"], "Chocolat")
         self.assertEqual(product["size"], "350 g")
-        self.assertEqual(product["image_url"], "https://images.openfoodfacts.org/images/products/000/010/120/9159/front_fr.4.400.jpg")
 
-    def test_legacy_images_and_supplied_urls(self):
+    def test_source_images_are_ignored(self):
         base = {"code": "12345678", "brands": "Brand", "product_name": "Tea"}
         product = get_product({**base, "images": {"front_en": {"rev": 3, "sizes": {"200": {}}}}})
-        self.assertEqual(product["image_url"], "https://images.openfoodfacts.org/images/products/12345678/front_en.3.200.jpg")
+        self.assertEqual(product, get_product(base))
         url = "https://images.openfoodfacts.org/front.jpg"
-        product = get_product({**base, "selected_images": {"front": {"display": {"en": url}}}})
-        self.assertEqual(product["image_url"], url)
+        product = get_product({**base, "image_url": url, "selected_images": {"front": {"display": {"en": url}}}})
+        self.assertEqual(product, get_product(base))
 
     def test_streamed_output_and_overwrite_protection(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -43,7 +41,7 @@ class ExtractProductsTests(unittest.TestCase):
                 stream.write("invalid json\n")
             with contextlib.redirect_stdout(io.StringIO()):
                 summary = extract(source, output)
-            self.assertEqual(summary["counts"], {"read": 3, "kept": 1, "missing_required": 1, "invalid_json": 1, "duplicates": 0, "with_size": 0, "with_image": 0})
+            self.assertEqual(summary["counts"], {"read": 3, "kept": 1, "missing_required": 1, "invalid_json": 1, "duplicates": 0, "with_size": 0})
             self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["barcode"], "00123")
             self.assertFalse(output.with_name(output.name + ".partial").exists())
             with self.assertRaises(FileExistsError):
@@ -71,7 +69,7 @@ class ExtractProductsTests(unittest.TestCase):
             self.assertEqual([product["barcode"] for product in products], ["00123", "123", "00999"])
             self.assertEqual(products[0], get_product(first))
             self.assertEqual(products[2]["name"], "Complete product")
-            self.assertEqual(summary["counts"], {"read": 6, "kept": 3, "missing_required": 1, "invalid_json": 0, "duplicates": 2, "with_size": 0, "with_image": 0})
+            self.assertEqual(summary["counts"], {"read": 6, "kept": 3, "missing_required": 1, "invalid_json": 0, "duplicates": 2, "with_size": 0})
 
 
 if __name__ == "__main__":

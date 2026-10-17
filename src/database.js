@@ -41,8 +41,7 @@ async function openDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       brand VARCHAR(255) NOT NULL,
       name VARCHAR(255) NOT NULL,
-      size VARCHAR(255),
-      image VARCHAR(255)
+      size VARCHAR(255)
     );
 
     CREATE TABLE IF NOT EXISTS codes (

@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "doihaveit-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-17",
+  "workers_dev": true,
+  "r2_buckets": [
+    {
+      "binding": "CATALOGS",
+      "bucket_name": "doihaveit"
+    }
+  ]
+}

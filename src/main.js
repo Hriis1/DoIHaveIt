@@ -3,13 +3,14 @@ import { Capacitor } from '@capacitor/core'
 import { initializeDatabase } from './database.js'
 import { mountCollectionsScreen } from './screens/collections/collections.js'
 import { mountCollectionScreen } from './screens/collection/collection.js'
+import { mountCatalogsScreen } from './screens/catalogs/catalogs.js'
 
 const app = document.querySelector('#app')
 const container = document.querySelector('#screen-content')
 const appMenu = document.querySelector('.app-menu')
 const isNative = Capacitor.isNativePlatform()
 const databaseReady = isNative ? initializeDatabase() : Promise.resolve()
-const screens = { collections: mountCollectionsScreen, collection: mountCollectionScreen }
+const screens = { collections: mountCollectionsScreen, collection: mountCollectionScreen, catalogs: mountCatalogsScreen }
 let unmountScreen
 
 // Dismiss the shared dropdown when leaving it or selecting an entry
@@ -26,7 +27,7 @@ appMenu.addEventListener('keydown', event => {
   appMenu.querySelector('summary').focus()
 })
 appMenu.querySelector('button').addEventListener('click', () => {
-  appMenu.open = false
+  showScreen('catalogs')
   appMenu.querySelector('summary').focus()
 })
 

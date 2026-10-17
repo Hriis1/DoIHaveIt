@@ -1,0 +1,34 @@
+<section class="catalogs-screen" aria-labelledby="catalogs-title">
+  <header class="catalogs-heading">
+    <h1 id="catalogs-title">Catalogs</h1>
+    <button class="catalogs-help" type="button" aria-label="What are catalogs?" aria-haspopup="dialog"><svg aria-hidden="true"><use href="#icon-help" /></svg></button>
+  </header>
+
+  <div class="catalogs-list" aria-label="Available catalogs">
+    <article class="catalog-card">
+      <div class="catalog-card-top">
+        <button class="catalog-expand" type="button" aria-expanded="false" aria-controls="food-drinks-description">
+          <span class="catalog-details">
+            <span class="catalog-name">Food &amp; drinks full</span>
+            <span class="catalog-size">≈600 MB</span>
+          </span>
+          <svg class="catalog-chevron" aria-hidden="true"><use href="#icon-chevron-down" /></svg>
+        </button>
+        <button class="catalog-download" type="button" aria-label="Download Food &amp; drinks full catalog"><svg aria-hidden="true"><use href="#icon-download" /></svg></button>
+      </div>
+      <p id="food-drinks-description" class="catalog-description" hidden>Food and drink products from around the world.</p>
+    </article>
+  </div>
+
+  <dialog class="catalogs-help-dialog" aria-labelledby="catalogs-help-title" aria-describedby="catalogs-help-description catalogs-help-size">
+    <div class="sheet">
+      <header class="catalogs-help-heading">
+        <h2 id="catalogs-help-title">What are catalogs?</h2>
+        <button class="catalogs-help-close" type="button" aria-label="Close explanation" autofocus><svg aria-hidden="true"><use href="#icon-close" /></svg></button>
+      </header>
+      <p id="catalogs-help-description">Catalogs are optional packs of product information. Add one to recognize its products without using tokens for AI calls</p>
+      <p id="catalogs-help-size">The size shown estimates the space added to your local database.</p>
+      <div class="sheet-actions"><button class="primary-button catalogs-help-done" type="button">Got it</button></div>
+    </div>
+  </dialog>
+</section>

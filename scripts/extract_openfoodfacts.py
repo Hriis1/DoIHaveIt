@@ -45,7 +45,8 @@ def get_product(product):
     }
 
 
-def extract(source, output):
+def extract(source, output, tags=None):
+    selected_tags = None if tags is None else set(tags)
     source = Path(source).resolve()
     output = Path(output).resolve()
     partial = output.with_name(output.name + ".partial")
@@ -59,7 +60,7 @@ def extract(source, output):
     started = time.monotonic()
     started_at = datetime.now(timezone.utc).isoformat()
     total_bytes = source.stat().st_size
-    counts = {"read": 0, "kept": 0, "missing_required": 0, "invalid_json": 0, "duplicates": 0, "with_size": 0}
+    counts = {"read": 0, "kept": 0, "missing_required": 0, "invalid_json": 0, "duplicates": 0, "with_size": 0, "excluded_by_tags": 0}
     seen_barcodes = set()
     last_progress = started
 
@@ -75,17 +76,25 @@ def extract(source, output):
             if not isinstance(product, dict):
                 counts["invalid_json"] += 1
                 continue
-            compact = get_product(product)
-            if compact is None:
-                counts["missing_required"] += 1
-            elif compact["barcode"] in seen_barcodes:
-                counts["duplicates"] += 1
+            # Match any requested category before extracting or reserving its barcode
+            categories = product.get("categories_tags")
+            if selected_tags is not None and (
+                not isinstance(categories, list)
+                or not any(isinstance(tag, str) and tag in selected_tags for tag in categories)
+            ):
+                counts["excluded_by_tags"] += 1
             else:
-                # Keep the first qualifying record for each barcode
-                destination.write(json.dumps(compact, ensure_ascii=False, separators=(",", ":")) + "\n")
-                seen_barcodes.add(compact["barcode"])
-                counts["kept"] += 1
-                counts["with_size"] += compact["size"] is not None
+                compact = get_product(product)
+                if compact is None:
+                    counts["missing_required"] += 1
+                elif compact["barcode"] in seen_barcodes:
+                    counts["duplicates"] += 1
+                else:
+                    # Keep the first qualifying record for each barcode
+                    destination.write(json.dumps(compact, ensure_ascii=False, separators=(",", ":")) + "\n")
+                    seen_barcodes.add(compact["barcode"])
+                    counts["kept"] += 1
+                    counts["with_size"] += compact["size"] is not None
             now = time.monotonic()
             if now - last_progress >= 10:
                 print(f"{compressed.tell() / total_bytes:.1%} read | {counts['read']:,} records | {counts['kept']:,} kept | {now - started:.0f}s", flush=True)
@@ -102,6 +111,7 @@ def extract(source, output):
         "completed_at": datetime.now(timezone.utc).isoformat(),
         "elapsed_seconds": round(time.monotonic() - started, 1),
         "counts": counts,
+        "category_tags": sorted(selected_tags) if selected_tags is not None else None,
         "attribution": "Open Food Facts contributors",
         "source_url": "https://static.openfoodfacts.org/data/openfoodfacts-products.jsonl.gz",
         "database_license": "ODbL-1.0",
@@ -123,8 +133,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source", type=Path, help="Downloaded .jsonl.gz file")
     parser.add_argument("output", type=Path, help="Destination .jsonl file (must not already exist)")
+    parser.add_argument("--tags", nargs="+", help="Include products matching at least one exact categories_tags value; omit to include all categories")
     args = parser.parse_args()
-    extract(args.source, args.output)
+    extract(args.source, args.output, tags=args.tags)
 
 
 if __name__ == "__main__":

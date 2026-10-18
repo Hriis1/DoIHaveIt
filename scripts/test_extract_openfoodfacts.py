@@ -41,7 +41,8 @@ class ExtractProductsTests(unittest.TestCase):
                 stream.write("invalid json\n")
             with contextlib.redirect_stdout(io.StringIO()):
                 summary = extract(source, output)
-            self.assertEqual(summary["counts"], {"read": 3, "kept": 1, "missing_required": 1, "invalid_json": 1, "duplicates": 0, "with_size": 0})
+            self.assertEqual(summary["counts"], {"read": 3, "kept": 1, "missing_required": 1, "invalid_json": 1, "duplicates": 0, "with_size": 0, "excluded_by_tags": 0})
+            self.assertIsNone(summary["category_tags"])
             self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["barcode"], "00123")
             self.assertFalse(output.with_name(output.name + ".partial").exists())
             with self.assertRaises(FileExistsError):
@@ -69,7 +70,47 @@ class ExtractProductsTests(unittest.TestCase):
             self.assertEqual([product["barcode"] for product in products], ["00123", "123", "00999"])
             self.assertEqual(products[0], get_product(first))
             self.assertEqual(products[2]["name"], "Complete product")
-            self.assertEqual(summary["counts"], {"read": 6, "kept": 3, "missing_required": 1, "invalid_json": 0, "duplicates": 2, "with_size": 0})
+            self.assertEqual(summary["counts"], {"read": 6, "kept": 3, "missing_required": 1, "invalid_json": 0, "duplicates": 2, "with_size": 0, "excluded_by_tags": 0})
+
+    def test_category_tags_match_any_and_keep_first_matching_barcode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "source.jsonl.gz"
+            output = Path(folder) / "drinks.jsonl"
+            base = {"brands": "Brand", "product_name": "Product"}
+            records = [
+                {**base, "code": "001", "categories_tags": ["en:foods"]},
+                {**base, "code": "001", "product_name": "Drink", "categories_tags": ["en:beverages"]},
+                {**base, "code": "002", "categories_tags": ["en:waters"]},
+                {**base, "code": "003", "categories_tags": ["en:beverages", "en:waters"]},
+                {**base, "code": "004"},
+                {**base, "code": "005", "categories_tags": None},
+                {**base, "code": "006", "categories_tags": "en:beverages"},
+                {**base, "code": "007", "categories_tags": [None, {}]},
+                {**base, "code": "008", "categories_tags": ["en:beverages-extra"]},
+                {**base, "code": "001", "product_name": "Later drink", "categories_tags": ["en:waters"]},
+            ]
+            with gzip.open(source, "wt", encoding="utf-8") as stream:
+                for record in records:
+                    stream.write(json.dumps(record) + "\n")
+            with contextlib.redirect_stdout(io.StringIO()):
+                summary = extract(source, output, tags=["en:beverages", "en:waters"])
+            products = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual([product["barcode"] for product in products], ["001", "002", "003"])
+            self.assertEqual(products[0]["name"], "Drink")
+            self.assertEqual(summary["counts"]["excluded_by_tags"], 6)
+            self.assertEqual(summary["counts"]["duplicates"], 1)
+            self.assertEqual(summary["category_tags"], ["en:beverages", "en:waters"])
+
+    def test_empty_category_tag_list_matches_nothing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "source.jsonl.gz"
+            output = Path(folder) / "products.jsonl"
+            with gzip.open(source, "wt", encoding="utf-8") as stream:
+                stream.write(json.dumps({"code": "001", "brands": "Brand", "product_name": "Drink", "categories_tags": ["en:beverages"]}) + "\n")
+            with contextlib.redirect_stdout(io.StringIO()):
+                summary = extract(source, output, tags=[])
+            self.assertEqual(output.read_text(encoding="utf-8"), "")
+            self.assertEqual(summary["counts"]["excluded_by_tags"], 1)
 
 
 if __name__ == "__main__":

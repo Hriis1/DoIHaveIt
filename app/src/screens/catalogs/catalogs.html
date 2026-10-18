@@ -11,6 +11,7 @@
           <span class="catalog-details">
             <span class="catalog-name">Food &amp; drinks full</span>
             <span class="catalog-size">≈450 MB</span>
+            <span class="catalog-installed" hidden>Added</span>
           </span>
           <svg class="catalog-chevron" aria-hidden="true"><use href="#icon-chevron-down" /></svg>
         </button>
@@ -19,6 +20,30 @@
       <p id="food-drinks-description" class="catalog-description" hidden>Food and drink products from around the world.</p>
     </article>
   </div>
+
+  <p class="catalog-error error" role="alert" hidden></p>
+
+  <dialog class="catalog-operation-dialog" aria-labelledby="catalog-operation-title" aria-describedby="catalog-operation-status">
+    <div class="sheet">
+      <h2 id="catalog-operation-title">Food &amp; drinks full</h2>
+      <div class="catalog-operation-state">
+        <span class="catalog-spinner" aria-hidden="true"></span>
+        <p id="catalog-operation-status" role="status" aria-live="polite">Preparing…</p>
+      </div>
+      <div class="sheet-actions"><button class="secondary-button catalog-operation-cancel" type="button">Cancel</button></div>
+    </div>
+  </dialog>
+
+  <dialog class="catalog-remove-dialog" aria-labelledby="catalog-remove-title" aria-describedby="catalog-remove-description">
+    <div class="sheet">
+      <h2 id="catalog-remove-title">Remove catalog?</h2>
+      <p id="catalog-remove-description">Remove Food &amp; drinks full? Products already used in your collections will be kept.</p>
+      <div class="sheet-actions">
+        <button class="secondary-button catalog-remove-cancel" type="button">Cancel</button>
+        <button class="danger-button catalog-remove-confirm" type="button">Remove</button>
+      </div>
+    </div>
+  </dialog>
 
   <dialog class="catalogs-help-dialog" aria-labelledby="catalogs-help-title" aria-describedby="catalogs-help-description catalogs-help-size">
     <div class="sheet">

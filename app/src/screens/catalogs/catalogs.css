@@ -140,3 +140,54 @@
   color: var(--muted);
   font-size: 13px;
 }
+
+.catalogs-screen .catalog-installed {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.catalogs-screen .catalog-operation-dialog,
+.catalogs-screen .catalog-remove-dialog {
+  inset: 0;
+  margin: auto;
+  width: calc(100% - 44px);
+  max-width: 380px;
+  border-radius: 20px;
+}
+
+.catalogs-screen .catalog-operation-state {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.catalogs-screen #catalog-operation-status {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.catalogs-screen #catalog-remove-description {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.catalogs-screen .catalog-spinner {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: catalog-spin 1s linear infinite;
+}
+
+@keyframes catalog-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catalogs-screen .catalog-spinner { animation: none; }
+}

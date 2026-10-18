@@ -2,6 +2,14 @@ import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite'
 
 const sqlite = new SQLiteConnection(CapacitorSQLite)
 let databasePromise
+let databaseQueue = Promise.resolve()
+
+// Keep unrelated queries and writes outside catalog transactions
+export function withDatabaseAccess(operation) {
+  const result = databaseQueue.then(async () => operation(await initializeDatabase()))
+  databaseQueue = result.catch(() => {})
+  return result
+}
 
 export function initializeDatabase() {
   // Share initialization across callers
@@ -66,6 +74,11 @@ async function openDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name VARCHAR(255) NOT NULL UNIQUE
     );
+
+    CREATE INDEX IF NOT EXISTS products_catalog_id ON products(catalog_id);
+    CREATE INDEX IF NOT EXISTS codes_catalog_id ON codes(catalog_id);
+    CREATE INDEX IF NOT EXISTS codes_product_id ON codes(product_id);
+    CREATE INDEX IF NOT EXISTS items_product_id ON items(product_id);
   `)
 
   return database

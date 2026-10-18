@@ -4,12 +4,14 @@ import { initializeDatabase } from './database.js'
 import { mountCollectionsScreen } from './screens/collections/collections.js'
 import { mountCollectionScreen } from './screens/collection/collection.js'
 import { mountCatalogsScreen } from './screens/catalogs/catalogs.js'
+import { prepareCatalogCache } from './modules/catalog/archive.js'
 
 const app = document.querySelector('#app')
 const container = document.querySelector('#screen-content')
 const appMenu = document.querySelector('.app-menu')
 const isNative = Capacitor.isNativePlatform()
 const databaseReady = isNative ? initializeDatabase() : Promise.resolve()
+if (isNative) prepareCatalogCache().catch(error => console.warn('Catalog cache cleanup failed:', error))
 const screens = { collections: mountCollectionsScreen, collection: mountCollectionScreen, catalogs: mountCatalogsScreen }
 let unmountScreen
 

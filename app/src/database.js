@@ -41,12 +41,14 @@ async function openDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       brand VARCHAR(255) NOT NULL,
       name VARCHAR(255) NOT NULL,
-      size VARCHAR(255)
+      size VARCHAR(255),
+      catalog_id INTEGER REFERENCES catalogs(id)
     );
 
     CREATE TABLE IF NOT EXISTS codes (
       code VARCHAR(255) PRIMARY KEY NOT NULL,
       product_id INTEGER NOT NULL REFERENCES products(id),
+      catalog_id INTEGER REFERENCES catalogs(id),
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -58,6 +60,11 @@ async function openDatabase() {
       image VARCHAR(255),
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS catalogs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name VARCHAR(255) NOT NULL UNIQUE
     );
   `)
 

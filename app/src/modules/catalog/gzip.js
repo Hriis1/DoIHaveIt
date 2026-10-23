@@ -3,7 +3,7 @@ import { checkCancellation } from './cancellation.js'
 
 // Validate gzip integrity while yielding bounded binary chunks instead of product objects
 export async function* decompressGzip(chunks, signal) {
-  const inflater = new Inflate({ windowBits: 31, chunkSize: 65536 })
+  const inflater = new Inflate({ windowBits: 31, chunkSize: 512 * 1024 })
   let output = []
   inflater.onData = chunk => output.push(chunk)
   for await (const chunk of chunks) {

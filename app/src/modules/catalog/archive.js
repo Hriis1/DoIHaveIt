@@ -82,10 +82,11 @@ export async function downloadArchive(name, signal) {
 }
 
 export async function* readArchiveChunks(path, signal) {
+  const chunkSize = 256 * 1024
   const { size } = await Filesystem.stat(fileOptions(path))
-  for (let offset = 0; offset < size; offset += 65536) {
+  for (let offset = 0; offset < size; offset += chunkSize) {
     checkCancellation(signal)
-    const length = Math.min(65536, size - offset)
+    const length = Math.min(chunkSize, size - offset)
     const { data } = await Filesystem.readFile({ ...fileOptions(path), offset, length })
     const bytes = Uint8Array.from(atob(data), character => character.charCodeAt(0))
     if (bytes.length !== length) throw new Error('The downloaded catalog archive is incomplete.')

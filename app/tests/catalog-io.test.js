@@ -47,7 +47,7 @@ const { Catalog } = await import('../src/modules/catalog/catalog.js')
 test('cache cleanup, bounded download writes and bounded archive reads', async () => {
   await prepareCatalogCache()
   assert.equal(files.size, 0)
-  const bytes = Buffer.alloc(200000, 3)
+  const bytes = Buffer.alloc(700000, 3)
   mock.method(globalThis, 'fetch', async () => new Response(bytes))
   const path = await downloadArchive('Food')
   assert.deepEqual(files.get(path), bytes)
@@ -55,7 +55,7 @@ test('cache cleanup, bounded download writes and bounded archive reads', async (
   const pieces = []
   for await (const chunk of readArchiveChunks(path)) pieces.push(chunk)
   assert.deepEqual(Buffer.concat(pieces), bytes)
-  assert.ok(Math.max(...reads) <= 65536)
+  assert.ok(Math.max(...reads) <= 256 * 1024)
   await deleteArchive(path)
   assert.equal(files.size, 0)
   mock.restoreAll()
@@ -101,14 +101,14 @@ test('class cleans downloaded files after a corrupt archive fails', async () => 
 })
 
 test('decompression preserves binary bytes in bounded writes and returns a decoded native path', async () => {
-  const bytes = Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(300000, 8)])
+  const bytes = Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(1300000, 8)])
   const path = 'catalog-downloads/Food.sqlite.gz'
   files.set(path, gzipSync(bytes))
   writes.length = 0
   const source = await decompressArchive(path)
   assert.deepEqual(files.get(source.path), bytes)
   assert.equal(source.databasePath, '/app cache/catalog-downloads/Food.sqlite')
-  assert.ok(Math.max(...writes) <= 65536)
+  assert.ok(Math.max(...writes) <= 512 * 1024)
   await deleteArchive(source.path)
   await deleteArchive(path)
 })

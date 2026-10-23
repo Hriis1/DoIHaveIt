@@ -27,6 +27,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const range = screen.querySelector('.gallery-range')
   const scanResultDialog = screen.querySelector('.scan-result-dialog')
   const scanResultTitle = screen.querySelector('#scan-result-title')
+  const scanResultBarcode = screen.querySelector('#scan-result-barcode')
   let active = true
   let request = 0
   let scanRequest = 0
@@ -52,6 +53,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   async function showScanResult(barcode) {
     const currentScan = ++scanRequest
     scanResultTitle.textContent = 'Looking up product…'
+    scanResultBarcode.textContent = `Barcode: ${barcode}`
     scanResultDialog.showModal()
     try {
       await databaseReady

@@ -185,6 +185,13 @@
   overflow-wrap: anywhere;
 }
 
+.collection-screen #scan-result-barcode {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .collection-screen .gallery-empty {
   text-align: center;
   padding: 40px 8px;

@@ -30,9 +30,10 @@
     <button class="gallery-scan primary-button" type="button"><svg aria-hidden="true"><use href="#icon-scan" /></svg>Scan and add</button>
   </footer>
 
-  <dialog class="scan-result-dialog" aria-labelledby="scan-result-title">
+  <dialog class="scan-result-dialog" aria-labelledby="scan-result-title" aria-describedby="scan-result-barcode">
     <div class="sheet">
       <h2 id="scan-result-title" role="status" aria-live="polite">Looking up product…</h2>
+      <p id="scan-result-barcode"></p>
       <div class="sheet-actions"><button class="primary-button scan-result-close" type="button">Close</button></div>
     </div>
   </dialog>

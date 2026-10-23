@@ -3,6 +3,7 @@ import html from './collection.html?raw'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getCollectionItems } from '../../repositories/itemRepo.js'
+import { getProductByBarcode } from '../../repositories/productRepo.js'
 import { createScanner } from '../../modules/scan/scan.js'
 
 const pageSize = 12
@@ -24,12 +25,19 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const next = screen.querySelector('.gallery-next')
   const pageLabel = screen.querySelector('.gallery-page')
   const range = screen.querySelector('.gallery-range')
+  const scanResultDialog = screen.querySelector('.scan-result-dialog')
+  const scanResultTitle = screen.querySelector('#scan-result-title')
   let active = true
   let request = 0
+  let scanRequest = 0
   let page = 1
   let collectionTotal
   const scanner = createScanner({
-    onScan: value => { if (active) search.value = value },
+    onScan: value => {
+      if (!active) return
+      search.value = value
+      void showScanResult(value)
+    },
     onError: message => {
       if (!active) return
       error.textContent = message
@@ -39,6 +47,24 @@ export function mountCollectionScreen(container, { collection, isNative, databas
 
   title.textContent = collection.name
   listen(screen.querySelector('.collection-back'), 'click', () => navigate('collections'))
+  listen(screen.querySelector('.scan-result-close'), 'click', () => scanResultDialog.close())
+
+  async function showScanResult(barcode) {
+    const currentScan = ++scanRequest
+    scanResultTitle.textContent = 'Looking up product…'
+    scanResultDialog.showModal()
+    try {
+      await databaseReady
+      if (!active || currentScan !== scanRequest) return
+      const product = await getProductByBarcode(barcode)
+      if (!active || currentScan !== scanRequest) return
+      scanResultTitle.textContent = product ? 'Product found' : 'Product not found'
+    } catch (lookupError) {
+      if (!active || currentScan !== scanRequest) return
+      console.error('Could not look up scanned product:', lookupError)
+      scanResultTitle.textContent = 'Could not look up product. Please try again.'
+    }
+  }
 
   async function showImage(item, picture, placeholder, currentRequest) {
     try {
@@ -140,6 +166,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     active = false
     events.abort()
     void scanner.destroy()
+    scanResultDialog.close()
     screen.remove()
   }
 }

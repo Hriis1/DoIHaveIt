@@ -34,6 +34,7 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
 
   const phases = {
     preparing: 'Preparing…', downloading: 'Downloading…', importing: 'Importing…',
+    decompressing: 'Decompressing…', checking: 'Checking catalog…',
     removing: 'Removing…', cancelling: 'Cancelling…', rollingBack: 'Reverting changes…',
     finishing: 'Finishing…', complete: 'Complete',
   }

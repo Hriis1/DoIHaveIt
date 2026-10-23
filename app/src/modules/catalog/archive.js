@@ -1,9 +1,18 @@
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { checkCancellation } from './cancellation.js'
+import { decompressGzip } from './gzip.js'
 
 const folder = 'catalog-downloads'
 const fileOptions = path => ({ path, directory: Directory.Cache })
 let cacheReady
+
+function encodeBase64(bytes) {
+  const parts = []
+  for (let offset = 0; offset < bytes.length; offset += 32768) {
+    parts.push(String.fromCharCode(...bytes.subarray(offset, offset + 32768)))
+  }
+  return btoa(parts.join(''))
+}
 
 export function prepareCatalogCache() {
   if (!cacheReady) {
@@ -40,7 +49,7 @@ export async function deleteArchive(path) {
 export async function downloadArchive(name, signal) {
   await prepareCatalogCache()
   checkCancellation(signal)
-  const path = `${folder}/${name}.jsonl.gz`
+  const path = `${folder}/${name}.sqlite.gz`
   let reader
   try {
     const response = await fetch(`https://doihaveit-api.hrishd.workers.dev/catalogs/${name}`, { signal })
@@ -55,7 +64,7 @@ export async function downloadArchive(name, signal) {
       // Send bounded pieces through Capacitor instead of retaining a whole response in memory
       for (let offset = 0; offset < value.length; offset += 32768) {
         checkCancellation(signal)
-        const data = btoa(String.fromCharCode(...value.subarray(offset, offset + 32768)))
+        const data = encodeBase64(value.subarray(offset, offset + 32768))
         await Filesystem.appendFile({ ...fileOptions(path), data })
       }
     }
@@ -74,12 +83,39 @@ export async function downloadArchive(name, signal) {
 
 export async function* readArchiveChunks(path, signal) {
   const { size } = await Filesystem.stat(fileOptions(path))
-  for (let offset = 0; offset < size; offset += 16384) {
+  for (let offset = 0; offset < size; offset += 65536) {
     checkCancellation(signal)
-    const length = Math.min(16384, size - offset)
+    const length = Math.min(65536, size - offset)
     const { data } = await Filesystem.readFile({ ...fileOptions(path), offset, length })
     const bytes = Uint8Array.from(atob(data), character => character.charCodeAt(0))
     if (bytes.length !== length) throw new Error('The downloaded catalog archive is incomplete.')
     yield bytes
+  }
+}
+
+export async function decompressArchive(archive, signal) {
+  const path = archive.slice(0, -3)
+  let firstChunk = true
+  try {
+    await Filesystem.writeFile({ ...fileOptions(path), data: '' })
+    for await (const bytes of decompressGzip(readArchiveChunks(archive, signal), signal)) {
+      checkCancellation(signal)
+      if (firstChunk) {
+        if (String.fromCharCode(...bytes.subarray(0, 16)) !== 'SQLite format 3\0') {
+          throw new Error('The catalog archive does not contain a SQLite database.')
+        }
+        firstChunk = false
+      }
+      await Filesystem.appendFile({ ...fileOptions(path), data: encodeBase64(bytes) })
+    }
+    if (firstChunk) throw new Error('The catalog archive is empty.')
+    checkCancellation(signal)
+    const { uri } = await Filesystem.getUri(fileOptions(path))
+    const url = new URL(uri)
+    if (url.protocol !== 'file:') throw new Error('The catalog database path is not supported on this device.')
+    return { path, databasePath: decodeURIComponent(url.pathname) }
+  } catch (error) {
+    await deleteArchive(path)
+    throw error
   }
 }

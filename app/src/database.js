@@ -3,12 +3,37 @@ import { CapacitorSQLite, SQLiteConnection } from '@capacitor-community/sqlite'
 const sqlite = new SQLiteConnection(CapacitorSQLite)
 let databasePromise
 let databaseQueue = Promise.resolve()
+let databaseAccessError
 
 // Keep unrelated queries and writes outside catalog transactions
 export function withDatabaseAccess(operation) {
-  const result = databaseQueue.then(async () => operation(await initializeDatabase()))
+  const result = databaseQueue.then(async () => {
+    if (databaseAccessError) throw databaseAccessError
+    return operation(await initializeDatabase())
+  })
   databaseQueue = result.catch(() => {})
   return result
+}
+
+// Keep attached-file lifecycle on the same serialized connection as the import
+export async function withAttachedDatabase(database, path, operation) {
+  await database.run('ATTACH DATABASE ? AS catalog_source;', [path], false)
+  try {
+    return await operation()
+  } finally {
+    try {
+      await database.run('DETACH DATABASE catalog_source;', [], false)
+    } catch (error) {
+      // Closing releases the attachment without misreporting an already committed import
+      console.warn('Could not detach the temporary catalog database:', error)
+      databasePromise = undefined
+      try {
+        await database.close()
+      } catch {
+        databaseAccessError = new Error('Database cleanup failed. Restart the app before trying again.')
+      }
+    }
+  }
 }
 
 export function initializeDatabase() {

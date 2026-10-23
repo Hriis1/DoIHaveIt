@@ -21,7 +21,7 @@ mock.module('@capacitor-community/sqlite', { namedExports: {
     async createConnection() { connections++; return connection }
   },
 } })
-const { initializeDatabase, withDatabaseAccess } = await import('../src/database.js')
+const { initializeDatabase, withDatabaseAccess, withAttachedDatabase } = await import('../src/database.js')
 
 test('initialization shares its promise and creates catalog columns and indexes', async () => {
   const first = initializeDatabase()
@@ -63,4 +63,24 @@ test('other repositories wait until a transaction has rolled back', async () => 
   release()
   await rejection
   assert.equal(await otherQuery, 0)
+})
+
+test('a detach failure releases the source connection without reporting a committed import as failed', async () => {
+  const calls = []
+  const warning = mock.method(console, 'warn', () => {})
+  const attachedConnection = {
+    run: async (sql, values, transaction) => {
+      assert.equal(transaction, false)
+      calls.push([sql, values])
+      if (sql.startsWith('DETACH')) throw new Error('Simulated detach failure')
+    },
+    close: async () => calls.push(['closed']),
+  }
+  try {
+    assert.equal(await withAttachedDatabase(attachedConnection, "/cache/catalog's.sqlite", async () => true), true)
+    assert.deepEqual(calls[0], ['ATTACH DATABASE ? AS catalog_source;', ["/cache/catalog's.sqlite"]])
+    assert.deepEqual(calls.at(-1), ['closed'])
+    await withDatabaseAccess(async () => {})
+    assert.equal(connections, 2, 'The next operation must reopen the connection')
+  } finally { warning.mock.restore() }
 })

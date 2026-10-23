@@ -1,7 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { isCatalogInstalled, importCatalog, removeCatalog } from '../../repositories/catalogRepo.js'
-import { downloadArchive, deleteArchive, readArchiveChunks } from './archive.js'
-import { readCatalogBatches } from './records.js'
+import { downloadArchive, deleteArchive, decompressArchive } from './archive.js'
 import { checkCancellation } from './cancellation.js'
 
 let operationQueue = Promise.resolve()
@@ -21,10 +20,13 @@ export class Catalog {
       if (await this.getInstalled()) return false
       onProgress('downloading')
       const path = await downloadArchive(this._name, signal)
+      let source
       try {
-        const batches = readCatalogBatches(readArchiveChunks(path, signal), signal)
-        return await importCatalog(this._name, batches, { signal, onProgress })
+        onProgress('decompressing')
+        source = await decompressArchive(path, signal)
+        return await importCatalog(this._name, source.databasePath, { signal, onProgress })
       } finally {
+        if (source) await deleteArchive(source.path)
         await deleteArchive(path)
       }
     }, options)

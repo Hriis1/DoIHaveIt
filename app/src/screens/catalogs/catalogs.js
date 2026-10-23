@@ -7,12 +7,15 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
   const screen = container.querySelector('.catalogs-screen')
   const events = new AbortController()
   const listen = (element, event, handler) => element.addEventListener(event, handler, { signal: events.signal })
-  const expand = screen.querySelector('.catalog-expand')
-  const description = screen.querySelector('.catalog-description')
   const helpDialog = screen.querySelector('.catalogs-help-dialog')
-  const catalog = new Catalog('drinsAndFoodData')
-  const action = screen.querySelector('.catalog-download')
-  const installedLabel = screen.querySelector('.catalog-installed')
+  const catalogs = [...screen.querySelectorAll('.catalog-card')].map(card => ({
+    card,
+    catalog: new Catalog(card.dataset.catalog),
+    name: card.querySelector('.catalog-name').textContent,
+    action: card.querySelector('.catalog-download'),
+    installedLabel: card.querySelector('.catalog-installed'),
+    installed: false,
+  }))
   const operationDialog = screen.querySelector('.catalog-operation-dialog')
   const removeDialog = screen.querySelector('.catalog-remove-dialog')
   const status = screen.querySelector('#catalog-operation-status')
@@ -20,16 +23,16 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
   const spinner = screen.querySelector('.catalog-spinner')
   const errorMessage = screen.querySelector('.catalog-error')
   let active = true
-  let installed = false
+  let selectedCatalog
   let busy = false
   let cancellable = true
   let controller
 
-  function renderInstalled(value) {
-    installed = value
-    installedLabel.hidden = !value
-    action.setAttribute('aria-label', `${value ? 'Remove' : 'Download'} Food & drinks full catalog`)
-    action.querySelector('use').setAttribute('href', value ? '#icon-trash' : '#icon-download')
+  function renderInstalled(entry, value) {
+    entry.installed = value
+    entry.installedLabel.hidden = !value
+    entry.action.setAttribute('aria-label', `${value ? 'Remove' : 'Download'} ${entry.name} catalog`)
+    entry.action.querySelector('use').setAttribute('href', value ? '#icon-trash' : '#icon-download')
   }
 
   const phases = {
@@ -46,21 +49,22 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
     cancel.disabled = !cancellable
   }
 
-  async function runOperation(remove) {
+  async function runOperation(entry, remove) {
     if (busy) return
     removeDialog.close()
     errorMessage.hidden = true
     busy = true
     controller = new AbortController()
+    screen.querySelector('#catalog-operation-title').textContent = entry.name
     cancel.textContent = 'Cancel'
     spinner.hidden = false
     onProgress('preparing')
     operationDialog.showModal()
     try {
       await databaseReady
-      await catalog[remove ? 'down' : 'up']({ signal: controller.signal, onProgress })
+      await entry.catalog[remove ? 'down' : 'up']({ signal: controller.signal, onProgress })
       if (!active) return
-      renderInstalled(!remove)
+      renderInstalled(entry, !remove)
       status.textContent = remove ? 'Catalog removed.' : 'Catalog added.'
     } catch (error) {
       if (active) status.textContent = error.name === 'AbortError' ? 'Cancelled. No changes were saved.' : error.message || 'The catalog operation failed.'
@@ -87,35 +91,44 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
     event.preventDefault()
     requestCancel()
   })
-  listen(action, 'click', () => {
-    if (!isNative) {
-      errorMessage.textContent = 'Catalogs are available in the Android and iOS app.'
-      errorMessage.hidden = false
-      return
-    }
-    if (installed) removeDialog.showModal()
-    else runOperation(false)
-  })
   listen(screen.querySelector('.catalog-remove-cancel'), 'click', () => removeDialog.close())
-  listen(screen.querySelector('.catalog-remove-confirm'), 'click', () => runOperation(true))
+  listen(screen.querySelector('.catalog-remove-confirm'), 'click', () => runOperation(selectedCatalog, true))
 
-  if (isNative) {
-    action.disabled = true
-    databaseReady.then(() => catalog.getInstalled()).then(value => {
-      if (active) renderInstalled(value)
-    }).catch(error => {
-      if (active) {
-        errorMessage.textContent = error.message || 'Could not load installed catalogs.'
+  for (const entry of catalogs) {
+    listen(entry.action, 'click', () => {
+      if (busy) return
+      if (!isNative) {
+        errorMessage.textContent = 'Catalogs are available in the Android and iOS app.'
         errorMessage.hidden = false
+        return
       }
-    }).finally(() => { if (active) action.disabled = false })
-  }
+      selectedCatalog = entry
+      if (entry.installed) {
+        screen.querySelector('#catalog-remove-description').textContent = `Remove ${entry.name}? Products already used in your collections will be kept.`
+        removeDialog.showModal()
+      } else runOperation(entry, false)
+    })
 
-  listen(expand, 'click', () => {
-    const expanded = expand.getAttribute('aria-expanded') !== 'true'
-    expand.setAttribute('aria-expanded', String(expanded))
-    description.hidden = !expanded
-  })
+    if (isNative) {
+      entry.action.disabled = true
+      databaseReady.then(() => entry.catalog.getInstalled()).then(value => {
+        if (active) renderInstalled(entry, value)
+      }).catch(error => {
+        if (active) {
+          errorMessage.textContent = error.message || 'Could not load installed catalogs.'
+          errorMessage.hidden = false
+        }
+      }).finally(() => { if (active) entry.action.disabled = false })
+    }
+
+    const expand = entry.card.querySelector('.catalog-expand')
+    const description = entry.card.querySelector('.catalog-description')
+    listen(expand, 'click', () => {
+      const expanded = expand.getAttribute('aria-expanded') !== 'true'
+      expand.setAttribute('aria-expanded', String(expanded))
+      description.hidden = !expanded
+    })
+  }
 
   listen(screen.querySelector('.catalogs-help'), 'click', () => helpDialog.showModal())
   listen(screen.querySelector('.catalogs-help-close'), 'click', () => helpDialog.close())

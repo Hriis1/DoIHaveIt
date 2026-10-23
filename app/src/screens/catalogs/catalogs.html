@@ -5,7 +5,7 @@
   </header>
 
   <div class="catalogs-list" aria-label="Available catalogs">
-    <article class="catalog-card">
+    <article class="catalog-card" data-catalog="drinsAndFoodData">
       <div class="catalog-card-top">
         <button class="catalog-expand" type="button" aria-expanded="false" aria-controls="food-drinks-description">
           <span class="catalog-details">
@@ -18,6 +18,20 @@
         <button class="catalog-download" type="button" aria-label="Download Food &amp; drinks full catalog"><svg aria-hidden="true"><use href="#icon-download" /></svg></button>
       </div>
       <p id="food-drinks-description" class="catalog-description" hidden>Food and drink products from around the world.</p>
+    </article>
+    <article class="catalog-card" data-catalog="drinks">
+      <div class="catalog-card-top">
+        <button class="catalog-expand" type="button" aria-expanded="false" aria-controls="drinks-description">
+          <span class="catalog-details">
+            <span class="catalog-name">Popular drinks</span>
+            <span class="catalog-size">≈33 MB</span>
+            <span class="catalog-installed" hidden>Added</span>
+          </span>
+          <svg class="catalog-chevron" aria-hidden="true"><use href="#icon-chevron-down" /></svg>
+        </button>
+        <button class="catalog-download" type="button" aria-label="Download Drinks catalog"><svg aria-hidden="true"><use href="#icon-download" /></svg></button>
+      </div>
+      <p id="drinks-description" class="catalog-description" hidden>Popular drink products from around the world.</p>
     </article>
   </div>
 

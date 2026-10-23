@@ -27,7 +27,7 @@ export default {
     }
 
     // Resolve catalog names to gzip archives directly inside data/
-    const filename = `${name}.jsonl.gz`
+    const filename = `${name}.sqlite.gz`
     const key = `data/${filename}`
     const object = request.method === 'HEAD'
       ? await env.CATALOGS.head(key)

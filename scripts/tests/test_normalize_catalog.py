@@ -4,8 +4,12 @@ import io
 import json
 from pathlib import Path
 import sqlite3
+import sys
 import tempfile
 import unittest
+
+# Load the scripts from their parent directory when running tests directly
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from normalize_catalog import get_record, get_size, normalize
 from jsonl_to_sqlite import convert

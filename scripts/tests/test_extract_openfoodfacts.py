@@ -3,8 +3,12 @@ import gzip
 import io
 import json
 from pathlib import Path
+import sys
 import tempfile
 import unittest
+
+# Load the scripts from their parent directory when running tests directly
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from extract_openfoodfacts import extract, get_product
 

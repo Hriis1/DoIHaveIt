@@ -143,7 +143,7 @@ class NormalizeCatalogTests(unittest.TestCase):
             records = [self.get_product(), self.get_product(barcode="00456"), self.get_product(barcode="00789", size=None)]
             source.write_text("\n".join(json.dumps(record) for record in records), encoding="utf-8")
             original_bytes = source.read_bytes()
-            with contextlib.redirect_stdout(io.StringIO()):
+            with contextlib.redirect_stdout(io.StringIO()) as console:
                 summary = normalize(source, output)
             normalized = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
             self.assertEqual([record["barcode"] for record in normalized], ["00123", "00456", "00789"])
@@ -153,6 +153,8 @@ class NormalizeCatalogTests(unittest.TestCase):
             self.assertEqual(summary["output_sha256"], hashlib.sha256(output.read_bytes()).hexdigest())
             self.assertTrue(summary["null_sizes_match"])
             self.assertEqual(summary["counts"]["records"], 3)
+            self.assertEqual(json.loads(console.getvalue()), summary)
+            self.assertEqual(set(Path(folder).iterdir()), {source, output})
             with self.assertRaises(FileExistsError):
                 normalize(source, output)
 

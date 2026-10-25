@@ -137,10 +137,9 @@ def extract(source, output, tags=None):
     source = Path(source).resolve()
     output = Path(output).resolve()
     partial = output.with_name(output.name + ".partial")
-    report_path = output.with_name(output.name + ".summary.json")
     if not source.is_file():
         raise FileNotFoundError(source)
-    for path in (output, partial, report_path):
+    for path in (output, partial):
         if path.exists():
             raise FileExistsError(f"Refusing to overwrite {path}")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -214,9 +213,6 @@ def extract(source, output, tags=None):
             "The first qualifying record for each barcode is retained; later duplicates are skipped. No database import was performed.",
         ],
     }
-    with report_path.open("x", encoding="utf-8") as report:
-        json.dump(summary, report, ensure_ascii=False, indent=2)
-        report.write("\n")
     print(json.dumps(summary, ensure_ascii=True, indent=2), flush=True)
     return summary
 

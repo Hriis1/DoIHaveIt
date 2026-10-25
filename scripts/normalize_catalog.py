@@ -238,10 +238,9 @@ def get_record(record, line_number):
 def normalize(source, output):
     source, output = Path(source).resolve(), Path(output).resolve()
     partial = output.with_name(output.name + ".partial")
-    report_path = output.with_name(output.name + ".summary.json")
     if not source.is_file():
         raise FileNotFoundError(source)
-    for path in (output, partial, report_path):
+    for path in (output, partial):
         if path.exists():
             raise FileExistsError(f"Refusing to overwrite {path}")
     started = last_progress = time.monotonic()
@@ -300,9 +299,6 @@ def normalize(source, output):
             "Preserve accepted records, their barcode strings, and source ordering; do not change the source file or SQLite importer.",
         ],
     }
-    with report_path.open("x", encoding="utf-8", newline="\n") as report:
-        json.dump(summary, report, ensure_ascii=False, indent=2)
-        report.write("\n")
     print(json.dumps(summary, ensure_ascii=True, indent=2), flush=True)
     return summary
 

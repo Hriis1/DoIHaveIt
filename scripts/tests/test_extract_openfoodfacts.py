@@ -174,12 +174,12 @@ class ExtractProductsTests(unittest.TestCase):
             with gzip.open(source, "wt", encoding="utf-8") as stream:
                 for record in records:
                     stream.write(json.dumps(record) + "\n")
-            with contextlib.redirect_stdout(io.StringIO()):
+            with contextlib.redirect_stdout(io.StringIO()) as console:
                 summary = extract(source, output, tags=["en:beverages"])
             self.assertEqual(json.loads(output.read_text(encoding="utf-8")), get_product(base))
             self.assertEqual(summary["counts"], {"read": 5, "kept": 1, "missing_required": 0, "invalid_json": 0, "duplicates": 1, "with_size": 0, "excluded_by_tags": 1, "excluded_multipacks": 1, "excluded_unconfirmed": 1})
-            saved_summary = json.loads(output.with_name(output.name + ".summary.json").read_text(encoding="utf-8"))
-            self.assertEqual(saved_summary["counts"], summary["counts"])
+            self.assertEqual(json.loads(console.getvalue()), summary)
+            self.assertEqual(set(Path(folder).iterdir()), {source, output})
 
 
 if __name__ == "__main__":

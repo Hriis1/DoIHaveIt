@@ -32,6 +32,24 @@ class ExtractProductsTests(unittest.TestCase):
         self.assertEqual(product["name"], "Chocolat")
         self.assertEqual(product["size"], "350 g")
 
+    def test_english_name_precedes_main_name_and_language_fallbacks(self):
+        base = {
+            "code": "5056784903766", "brands": "Monster Energy", "lang": "nb",
+            "product_name_en": " Ultra Strawberry Dreams ",
+            "product_name": "Monster Energy Ultra Strawberry Dreams Uten Sukker",
+            "product_name_nb": "Norwegian name", "product_name_fr": "French name",
+        }
+        self.assertEqual(get_product(base)["name"], "Ultra Strawberry Dreams")
+        for english in (None, "", "   ", 123):
+            with self.subTest(english=english):
+                product = {**base, "product_name_en": english}
+                self.assertEqual(get_product(product)["name"], base["product_name"])
+                product["product_name"] = " "
+                self.assertEqual(get_product(product)["name"], "Norwegian name")
+                product["product_name_nb"] = ""
+                self.assertEqual(get_product(product)["name"], "French name")
+        self.assertEqual(get_product({**base, "product_name": None})["name"], "Ultra Strawberry Dreams")
+
     def test_source_images_are_ignored(self):
         base = {"code": "12345678", "brands": "Brand", "product_name": "Tea"}
         product = get_product({**base, "images": {"front_en": {"rev": 3, "sizes": {"200": {}}}}})

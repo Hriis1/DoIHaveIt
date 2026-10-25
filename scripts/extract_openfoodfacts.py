@@ -52,6 +52,10 @@ def get_languages(product, available):
 
 
 def get_name(product):
+    # Prefer English before the main name and existing language fallbacks
+    name = get_text(product.get("product_name_en"))
+    if name:
+        return name
     name = get_text(product.get("product_name"))
     if name:
         return name
@@ -209,7 +213,7 @@ def extract(source, output, tags=None):
             "International coverage; no country filter.",
             "Identifiable multipacks are excluded using quantity, product descriptions, and recognized packaging container counts.",
             "Uncertain records, plain weights or volumes, and missing or incomplete packaging data are retained when no multipack evidence is recognized. Undetected multipacks may remain.",
-            "Missing sizes are null. Original product names and languages are retained.",
+            "Missing sizes are null. Prefer the English product name, then product_name, then the product's language and other available languages; retain the selected text without translation.",
             "The first qualifying record for each barcode is retained; later duplicates are skipped. No database import was performed.",
         ],
     }

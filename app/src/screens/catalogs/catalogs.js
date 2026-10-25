@@ -11,6 +11,7 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
   const catalogs = [...screen.querySelectorAll('.catalog-card')].map(card => ({
     card,
     catalog: new Catalog(card.dataset.catalog),
+    compressed: card.dataset.compressed === 'true',
     name: card.querySelector('.catalog-name').textContent,
     action: card.querySelector('.catalog-download'),
     installedLabel: card.querySelector('.catalog-installed'),
@@ -62,7 +63,7 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
     operationDialog.showModal()
     try {
       await databaseReady
-      await entry.catalog[remove ? 'down' : 'up']({ signal: controller.signal, onProgress })
+      await entry.catalog[remove ? 'down' : 'up']({ signal: controller.signal, onProgress, compressed: entry.compressed })
       if (!active) return
       renderInstalled(entry, !remove)
       status.textContent = remove ? 'Catalog removed.' : 'Catalog added.'

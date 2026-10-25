@@ -312,15 +312,22 @@ test('worker serves SQLite archive bytes with CORS and confines names', async ()
     keys.push(key)
     return { body: new Uint8Array([31, 139]), size: 2, httpEtag: '"catalog"' }
   } } }
-  const response = await worker.fetch(new Request('https://example.com/catalogs/drinsAndFoodData'), env)
-  assert.equal(response.headers.get('access-control-allow-origin'), '*')
-  assert.equal(response.headers.get('content-encoding'), null)
-  assert.equal((await response.arrayBuffer()).byteLength, 2)
-  assert.deepEqual(keys, ['data/drinsAndFoodData.sqlite.gz'])
+  for (const [query, extension, type] of [
+    ['', '.sqlite', 'application/vnd.sqlite3'],
+    ['?compressed=false', '.sqlite', 'application/vnd.sqlite3'],
+    ['?compressed=true', '.sqlite.gz', 'application/gzip'],
+  ]) {
+    const response = await worker.fetch(new Request(`https://example.com/catalogs/drinsAndFoodData${query}`), env)
+    assert.equal(response.headers.get('access-control-allow-origin'), '*')
+    assert.equal(response.headers.get('content-encoding'), null)
+    assert.equal(response.headers.get('content-type'), type)
+    assert.equal((await response.arrayBuffer()).byteLength, 2)
+    assert.equal(keys.at(-1), `data/drinsAndFoodData${extension}`)
+  }
   for (const name of ['a-b', 'a_b', 'a%2Fb', '%00', '%ZZ']) {
     const rejected = await worker.fetch(new Request(`https://example.com/catalogs/${name}`), env)
     assert.equal(rejected.status, 400)
     assert.equal(rejected.headers.get('access-control-allow-origin'), '*')
   }
-  assert.equal(keys.length, 1)
+  assert.equal(keys.length, 3)
 })

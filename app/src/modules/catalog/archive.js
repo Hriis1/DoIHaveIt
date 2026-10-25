@@ -46,13 +46,13 @@ export async function deleteArchive(path) {
   }
 }
 
-export async function downloadArchive(name, signal) {
+export async function downloadArchive(name, signal, compressed = false) {
   await prepareCatalogCache()
   checkCancellation(signal)
-  const path = `${folder}/${name}.sqlite.gz`
+  const path = `${folder}/${name}.sqlite${compressed ? '.gz' : ''}`
   let reader
   try {
-    const response = await fetch(`https://doihaveit-api.hrishd.workers.dev/catalogs/${name}`, { signal })
+    const response = await fetch(`https://doihaveit-api.hrishd.workers.dev/catalogs/${name}?compressed=${compressed}`, { signal })
     if (!response.ok) throw new Error(`Catalog download failed (HTTP ${response.status}).`)
     if (!response.body) throw new Error('Streaming downloads are not supported on this device.')
     await Filesystem.writeFile({ ...fileOptions(path), data: '' })
@@ -94,6 +94,13 @@ export async function* readArchiveChunks(path, signal) {
   }
 }
 
+export async function getArchiveSource(path) {
+  const { uri } = await Filesystem.getUri(fileOptions(path))
+  const url = new URL(uri)
+  if (url.protocol !== 'file:') throw new Error('The catalog database path is not supported on this device.')
+  return { path, databasePath: decodeURIComponent(url.pathname) }
+}
+
 export async function decompressArchive(archive, signal) {
   const path = archive.slice(0, -3)
   let firstChunk = true
@@ -111,10 +118,7 @@ export async function decompressArchive(archive, signal) {
     }
     if (firstChunk) throw new Error('The catalog archive is empty.')
     checkCancellation(signal)
-    const { uri } = await Filesystem.getUri(fileOptions(path))
-    const url = new URL(uri)
-    if (url.protocol !== 'file:') throw new Error('The catalog database path is not supported on this device.')
-    return { path, databasePath: decodeURIComponent(url.pathname) }
+    return await getArchiveSource(path)
   } catch (error) {
     await deleteArchive(path)
     throw error

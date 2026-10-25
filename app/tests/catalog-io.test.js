@@ -79,10 +79,14 @@ test('class reports phases, skips repeat installs and cleans up after import', a
   const bytes = Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(200000, 5)])
   const archive = gzipSync(bytes)
   let downloads = 0
-  mock.method(globalThis, 'fetch', async () => { downloads++; return new Response(archive) })
+  mock.method(globalThis, 'fetch', async url => {
+    assert.equal(new URL(url).searchParams.get('compressed'), 'true')
+    downloads++
+    return new Response(archive)
+  })
   const catalog = new Catalog('Food')
   const phases = []
-  assert.equal(await catalog.up({ onProgress: phase => phases.push(phase) }), true)
+  assert.equal(await catalog.up({ compressed: true, onProgress: phase => phases.push(phase) }), true)
   assert.deepEqual(phases, ['preparing', 'downloading', 'decompressing', 'checking', 'importing', 'finishing', 'complete'])
   assert.equal(files.size, 0)
   assert.equal(await catalog.up(), false)
@@ -92,9 +96,26 @@ test('class reports phases, skips repeat installs and cleans up after import', a
   mock.restoreAll()
 })
 
+test('class imports uncompressed SQLite by default or explicitly without decompression', async () => {
+  const bytes = Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(200000, 5)])
+  mock.method(globalThis, 'fetch', async url => {
+    assert.equal(new URL(url).searchParams.get('compressed'), 'false')
+    return new Response(bytes)
+  })
+  for (const options of [{}, { compressed: false }]) {
+    const catalog = new Catalog('Food')
+    const phases = []
+    assert.equal(await catalog.up({ ...options, onProgress: phase => phases.push(phase) }), true)
+    assert.deepEqual(phases, ['preparing', 'downloading', 'checking', 'importing', 'finishing', 'complete'])
+    assert.equal(files.size, 0)
+    await catalog.down()
+  }
+  mock.restoreAll()
+})
+
 test('class cleans downloaded files after a corrupt archive fails', async () => {
   mock.method(globalThis, 'fetch', async () => new Response('broken gzip'))
-  await assert.rejects(() => new Catalog('Food').up())
+  await assert.rejects(() => new Catalog('Food').up({ compressed: true }))
   assert.equal(installed, false)
   assert.equal(files.size, 0)
   mock.restoreAll()
@@ -123,7 +144,7 @@ test('cancelling decompression removes the incomplete SQLite file and download',
     if (parameters.path.endsWith('.sqlite')) controller.abort()
   }
   try {
-    await assert.rejects(() => new Catalog('Food').up({ signal: controller.signal }), { name: 'AbortError' })
+    await assert.rejects(() => new Catalog('Food').up({ compressed: true, signal: controller.signal }), { name: 'AbortError' })
     assert.equal(files.size, 0)
     assert.equal(installed, false)
   } finally {
@@ -134,7 +155,7 @@ test('cancelling decompression removes the incomplete SQLite file and download',
 
 test('a gzip containing JSON instead of SQLite is rejected and cleaned up', async () => {
   mock.method(globalThis, 'fetch', async () => new Response(gzipSync('{"barcode":"001"}')))
-  await assert.rejects(() => new Catalog('Food').up(), /SQLite database/)
+  await assert.rejects(() => new Catalog('Food').up({ compressed: true }), /SQLite database/)
   assert.equal(files.size, 0)
   assert.equal(installed, false)
   mock.restoreAll()

@@ -1,6 +1,6 @@
 import { Capacitor } from '@capacitor/core'
 import { isCatalogInstalled, importCatalog, removeCatalog } from '../../repositories/catalogRepo.js'
-import { downloadArchive, deleteArchive, decompressArchive } from './archive.js'
+import { downloadArchive, deleteArchive, decompressArchive, getArchiveSource } from './archive.js'
 import { checkCancellation } from './cancellation.js'
 
 let operationQueue = Promise.resolve()
@@ -15,18 +15,22 @@ export class Catalog {
     return isCatalogInstalled(this._name)
   }
 
-  up(options = {}) {
+  up({ compressed = false, ...options } = {}) {
     return this._schedule(async ({ signal, onProgress }) => {
       if (await this.getInstalled()) return false
       onProgress('downloading')
-      const path = await downloadArchive(this._name, signal)
+      const path = await downloadArchive(this._name, signal, compressed)
       let source
       try {
-        onProgress('decompressing')
-        source = await decompressArchive(path, signal)
+        if (compressed) {
+          onProgress('decompressing')
+          source = await decompressArchive(path, signal)
+        } else {
+          source = await getArchiveSource(path)
+        }
         return await importCatalog(this._name, source.databasePath, { signal, onProgress })
       } finally {
-        if (source) await deleteArchive(source.path)
+        if (source && source.path !== path) await deleteArchive(source.path)
         await deleteArchive(path)
       }
     }, options)

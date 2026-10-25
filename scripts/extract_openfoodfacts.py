@@ -1,4 +1,4 @@
-"""Stream confirmed individual items from an Open Food Facts dump into a compact catalog."""
+"""Stream an Open Food Facts dump into a compact catalog, excluding identifiable multipacks."""
 
 import argparse
 from datetime import datetime, timezone
@@ -146,7 +146,7 @@ def extract(source, output, tags=None):
     started = time.monotonic()
     started_at = datetime.now(timezone.utc).isoformat()
     total_bytes = source.stat().st_size
-    counts = {"read": 0, "kept": 0, "missing_required": 0, "invalid_json": 0, "duplicates": 0, "with_size": 0, "excluded_by_tags": 0, "excluded_multipacks": 0, "excluded_unconfirmed": 0}
+    counts = {"read": 0, "kept": 0, "missing_required": 0, "invalid_json": 0, "duplicates": 0, "with_size": 0, "excluded_by_tags": 0, "excluded_multipacks": 0}
     seen_barcodes = set()
     last_progress = started
 
@@ -174,8 +174,8 @@ def extract(source, output, tags=None):
                 item_status = get_item_status(product) if compact is not None else None
                 if compact is None:
                     counts["missing_required"] += 1
-                elif item_status != "individual":
-                    counts[f"excluded_{'multipacks' if item_status == 'multipack' else 'unconfirmed'}"] += 1
+                elif item_status == "multipack":
+                    counts["excluded_multipacks"] += 1
                 elif compact["barcode"] in seen_barcodes:
                     counts["duplicates"] += 1
                 else:
@@ -207,8 +207,8 @@ def extract(source, output, tags=None):
         "license_url": "https://openfoodfacts.github.io/documentation/docs/Product-Opener/api/tutorials/license-be-on-the-legal-side/",
         "notes": [
             "International coverage; no country filter.",
-            "Only confirmed individual items are retained: explicit single-unit descriptions or complete packaging data with one recognized item container. Multipacks and unconfirmed items are excluded.",
-            "A plain weight or volume is not proof of an individual item. Confirmation depends on the supplied metadata; unsupported descriptions are excluded unless other evidence confirms a single item.",
+            "Identifiable multipacks are excluded using quantity, product descriptions, and recognized packaging container counts.",
+            "Uncertain records, plain weights or volumes, and missing or incomplete packaging data are retained when no multipack evidence is recognized. Undetected multipacks may remain.",
             "Missing sizes are null. Original product names and languages are retained.",
             "The first qualifying record for each barcode is retained; later duplicates are skipped. No database import was performed.",
         ],

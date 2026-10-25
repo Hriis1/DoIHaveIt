@@ -51,7 +51,7 @@ class ExtractProductsTests(unittest.TestCase):
                 stream.write("invalid json\n")
             with contextlib.redirect_stdout(io.StringIO()):
                 summary = extract(source, output)
-            self.assertEqual(summary["counts"], {"read": 3, "kept": 1, "missing_required": 1, "invalid_json": 1, "duplicates": 0, "with_size": 0, "excluded_by_tags": 0, "excluded_multipacks": 0, "excluded_unconfirmed": 0})
+            self.assertEqual(summary["counts"], {"read": 3, "kept": 1, "missing_required": 1, "invalid_json": 1, "duplicates": 0, "with_size": 0, "excluded_by_tags": 0, "excluded_multipacks": 0})
             self.assertIsNone(summary["category_tags"])
             self.assertEqual(json.loads(output.read_text(encoding="utf-8"))["barcode"], "00123")
             self.assertFalse(output.with_name(output.name + ".partial").exists())
@@ -80,7 +80,7 @@ class ExtractProductsTests(unittest.TestCase):
             self.assertEqual([product["barcode"] for product in products], ["00123", "123", "00999"])
             self.assertEqual(products[0], get_product(first))
             self.assertEqual(products[2]["name"], "Complete product")
-            self.assertEqual(summary["counts"], {"read": 6, "kept": 3, "missing_required": 1, "invalid_json": 0, "duplicates": 2, "with_size": 0, "excluded_by_tags": 0, "excluded_multipacks": 0, "excluded_unconfirmed": 0})
+            self.assertEqual(summary["counts"], {"read": 6, "kept": 3, "missing_required": 1, "invalid_json": 0, "duplicates": 2, "with_size": 0, "excluded_by_tags": 0, "excluded_multipacks": 0})
 
     def test_category_tags_match_any_and_keep_first_matching_barcode(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -176,10 +176,35 @@ class ExtractProductsTests(unittest.TestCase):
                     stream.write(json.dumps(record) + "\n")
             with contextlib.redirect_stdout(io.StringIO()) as console:
                 summary = extract(source, output, tags=["en:beverages"])
-            self.assertEqual(json.loads(output.read_text(encoding="utf-8")), get_product(base))
-            self.assertEqual(summary["counts"], {"read": 5, "kept": 1, "missing_required": 0, "invalid_json": 0, "duplicates": 1, "with_size": 0, "excluded_by_tags": 1, "excluded_multipacks": 1, "excluded_unconfirmed": 1})
+            self.assertEqual(json.loads(output.read_text(encoding="utf-8")), get_product(records[1]))
+            self.assertEqual(summary["counts"], {"read": 5, "kept": 1, "missing_required": 0, "invalid_json": 0, "duplicates": 2, "with_size": 1, "excluded_by_tags": 1, "excluded_multipacks": 1})
             self.assertEqual(json.loads(console.getvalue()), summary)
             self.assertEqual(set(Path(folder).iterdir()), {source, output})
+
+    def test_uncertain_records_are_retained_and_known_multipacks_are_excluded(self):
+        with tempfile.TemporaryDirectory() as folder:
+            source = Path(folder) / "source.jsonl.gz"
+            output = Path(folder) / "products.jsonl"
+            base = {"brands": "Brand", "product_name": "Drink"}
+            variants = [
+                {}, {"quantity": "500 ml"}, {"quantity": "350 g"},
+                {**SINGLE_PACKAGING, "packagings_complete": 0},
+                {"packagings": [{"shape": "en:unknown", "number_of_units": 1}]},
+                {"product_name": "Gift box", "quantity": "1 pack"},
+                {"quantity": "6 x 500 ml"}, {"product_name_fr": "Twin pack"},
+                {"packagings": [{"shape": "en:bottle", "number_of_units": 6}]},
+            ]
+            records = [{**base, **variant, "code": f"00{index}"} for index, variant in enumerate(variants)]
+            with gzip.open(source, "wt", encoding="utf-8") as stream:
+                for record in records:
+                    stream.write(json.dumps(record) + "\n")
+            with contextlib.redirect_stdout(io.StringIO()):
+                summary = extract(source, output)
+            products = [json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()]
+            self.assertEqual(products, [get_product(record) for record in records[:6]])
+            self.assertEqual(summary["counts"]["kept"], 6)
+            self.assertEqual(summary["counts"]["excluded_multipacks"], 3)
+            self.assertNotIn("excluded_unconfirmed", summary["counts"])
 
 
 if __name__ == "__main__":

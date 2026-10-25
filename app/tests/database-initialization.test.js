@@ -32,11 +32,38 @@ test('initialization shares its promise and creates catalog columns and indexes'
     assert.ok(database.prepare(`PRAGMA table_info(${table})`).all().some(column => column.name === 'catalog_id'))
   }
   const indexes = database.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all().map(row => row.name)
-  for (const name of ['products_catalog_id', 'codes_catalog_id', 'codes_product_id', 'items_product_id']) {
+  for (const name of ['products_catalog_id', 'products_brand_name_size', 'products_brand_name_null_size', 'codes_catalog_id', 'codes_product_id', 'items_product_id']) {
     assert.ok(indexes.includes(name))
   }
   assert.equal(database.prepare('PRAGMA foreign_keys').get().foreign_keys, 1)
   assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [])
+})
+
+test('product identities are unique for both null and known sizes', async () => {
+  await withDatabaseAccess(async () => {
+    database.exec('BEGIN;')
+    try {
+      const insert = database.prepare('INSERT INTO products (brand, name, size) VALUES (?, ?, ?);')
+      insert.run('monster', 'classic', null)
+      assert.throws(() => insert.run('monster', 'classic', null), /UNIQUE constraint failed/)
+
+      insert.run('monster', 'classic', '500 ml')
+      assert.throws(() => insert.run('monster', 'classic', '500 ml'), /UNIQUE constraint failed/)
+
+      // Keep distinct sizes, product names, brands, and literal size strings separate
+      for (const values of [
+        ['monster', 'classic', '250 ml'], ['monster', 'classic', 'empty'], ['monster', 'classic', ''],
+        ['monster', 'ultra', null], ['another brand', 'classic', null], ['Monster', 'classic', null],
+      ]) insert.run(...values)
+      assert.equal(database.prepare('SELECT COUNT(*) AS n FROM products;').get().n, 8)
+
+      assert.throws(() => database.prepare("UPDATE products SET size = NULL WHERE size = '500 ml';").run(), /UNIQUE constraint failed/)
+      assert.throws(() => database.prepare("UPDATE products SET size = '500 ml' WHERE size = '250 ml';").run(), /UNIQUE constraint failed/)
+      assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [])
+    } finally {
+      database.exec('ROLLBACK;')
+    }
+  })
 })
 
 test('other repositories wait until a transaction has rolled back', async () => {

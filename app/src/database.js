@@ -101,6 +101,9 @@ async function openDatabase() {
     );
 
     CREATE INDEX IF NOT EXISTS products_catalog_id ON products(catalog_id);
+    -- Enforce product identity for both known and unknown sizes
+    CREATE UNIQUE INDEX IF NOT EXISTS products_brand_name_size ON products(brand, name, size) WHERE size IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS products_brand_name_null_size ON products(brand, name) WHERE size IS NULL;
     CREATE INDEX IF NOT EXISTS codes_catalog_id ON codes(catalog_id);
     CREATE INDEX IF NOT EXISTS codes_product_id ON codes(product_id);
     CREATE INDEX IF NOT EXISTS items_product_id ON items(product_id);

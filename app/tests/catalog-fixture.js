@@ -5,7 +5,7 @@ import { join, resolve, sep } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { createCatalogRepository } from '../src/repositories/catalogRepo.js'
 
-export const product = (barcode, name = 'Product') => ({ barcode, brand: 'Brand', name, size: null })
+export const product = (barcode, name = `Product ${barcode}`) => ({ barcode, brand: 'Brand', name, size: null })
 export const options = signal => ({ signal, onProgress: () => {} })
 
 export function temporaryDirectory(t) {

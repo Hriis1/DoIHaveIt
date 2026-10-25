@@ -77,7 +77,7 @@ export function createCatalogRepository(access = withDatabaseAccess) {
     `, [afterId, lastId])
     if (invalid.length) throw new Error('The catalog contains a product with invalid or missing fields.')
     checkCancellation(signal)
-    // Reserve an ID range above existing products; source IDs never become local IDs directly
+    // Reserve local IDs and let the identity indexes reuse products within and across batches
     await database.executeSet([
       {
         statement: `INSERT INTO main.products (id, brand, name, size, catalog_id)
@@ -85,15 +85,26 @@ export function createCatalogRepository(access = withDatabaseAccess) {
           FROM catalog_source.catalog_products AS source
           WHERE source.source_id > ? AND source.source_id <= ?
             AND NOT EXISTS (SELECT 1 FROM main.codes WHERE code = source.barcode)
-          ORDER BY source.source_id;`,
+          ORDER BY source.source_id
+          ON CONFLICT DO NOTHING;`,
         values: [baseId, catalogId, afterId, lastId],
       },
+      // Separate size lookups use the unique indexes for both known and null sizes
       {
         statement: `INSERT INTO main.codes (code, product_id, catalog_id)
-          SELECT source.barcode, product.id, ? FROM catalog_source.catalog_products AS source
-          JOIN main.products AS product ON product.id = ? + source.source_id AND product.catalog_id = ?
-          WHERE source.source_id > ? AND source.source_id <= ? ORDER BY source.source_id;`,
-        values: [catalogId, baseId, catalogId, afterId, lastId],
+          SELECT source.barcode,
+            CASE WHEN NULLIF(trim(source.size), '') IS NULL THEN (
+              SELECT id FROM main.products
+              WHERE brand = trim(source.brand) AND name = trim(source.name) AND size IS NULL
+            ) ELSE (
+              SELECT id FROM main.products
+              WHERE brand = trim(source.brand) AND name = trim(source.name) AND size = trim(source.size)
+            ) END, ?
+          FROM catalog_source.catalog_products AS source
+          WHERE source.source_id > ? AND source.source_id <= ?
+            AND NOT EXISTS (SELECT 1 FROM main.codes WHERE code = source.barcode)
+          ORDER BY source.source_id;`,
+        values: [catalogId, afterId, lastId],
       },
     ], false)
   }

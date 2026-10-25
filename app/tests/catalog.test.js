@@ -54,6 +54,73 @@ test('SQL merge skips existing barcodes, respects product ID history and leaves 
   assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [])
 })
 
+test('new barcodes reuse existing products after trimming and preserve catalog ownership', async t => {
+  const { database, repository, source } = fixture(t)
+  database.exec(`INSERT INTO catalogs (name) VALUES ('Existing');
+    INSERT INTO products (id, brand, name, size, catalog_id) VALUES
+      (10, 'monster', 'classic', NULL, NULL), (20, 'monster', 'classic', '500 ml', 1);
+    INSERT INTO codes (code, product_id, catalog_id) VALUES ('old-null', 10, NULL), ('old-sized', 20, 1);`)
+  const before = database.prepare('SELECT * FROM products ORDER BY id;').all()
+  await repository.importCatalog('Drinks', source([
+    { barcode: 'new-null', brand: ' monster ', name: ' classic ', size: null },
+    { barcode: 'new-sized', brand: 'monster', name: 'classic', size: ' 500 ml ' },
+    { barcode: 'new-empty', brand: 'monster', name: 'classic', size: ' ' },
+  ]), options())
+  assert.deepEqual(database.prepare('SELECT * FROM products ORDER BY id;').all(), before)
+  const codes = database.prepare('SELECT code, product_id, catalog_id FROM codes ORDER BY code;').all()
+  assert.deepEqual(codes.map(row => ({ ...row })), [
+    { code: 'new-empty', product_id: 10, catalog_id: 2 },
+    { code: 'new-null', product_id: 10, catalog_id: 2 },
+    { code: 'new-sized', product_id: 20, catalog_id: 2 },
+    { code: 'old-null', product_id: 10, catalog_id: null },
+    { code: 'old-sized', product_id: 20, catalog_id: 1 },
+  ])
+  assert.deepEqual(database.prepare('PRAGMA foreign_key_check;').all(), [])
+})
+
+test('matching products in a batch share an identity while exact differences stay separate', async t => {
+  const { database, repository, source } = fixture(t)
+  const records = [
+    { barcode: 'null-a', brand: 'monster', name: 'classic', size: null },
+    { barcode: 'null-b', brand: ' monster ', name: ' classic ', size: '' },
+    { barcode: 'sized-a', brand: 'monster', name: 'classic', size: '500 ml' },
+    { barcode: 'sized-b', brand: 'monster', name: 'classic', size: ' 500 ml ' },
+    { barcode: 'smaller', brand: 'monster', name: 'classic', size: '250 ml' },
+    { barcode: 'size-spelling', brand: 'monster', name: 'classic', size: '500ml' },
+    { barcode: 'brand-case', brand: 'Monster', name: 'classic', size: '500 ml' },
+    { barcode: 'name-case', brand: 'monster', name: 'Classic', size: '500 ml' },
+  ]
+  await repository.importCatalog('Drinks', source(records), options())
+  const ids = Object.fromEntries(database.prepare('SELECT code, product_id FROM codes;').all().map(row => [row.code, row.product_id]))
+  assert.equal(ids['null-a'], ids['null-b'])
+  assert.equal(ids['sized-a'], ids['sized-b'])
+  const distinct = ['null-a', 'sized-a', 'smaller', 'size-spelling', 'brand-case', 'name-case']
+  assert.equal(new Set(distinct.map(code => ids[code])).size, 6)
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM products;').get().n, 6)
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM codes;').get().n, records.length)
+})
+
+test('matching products across import batches share one product', async t => {
+  const { database, repository, source } = fixture(t)
+  const records = Array.from({ length: 5002 }, (_, index) => product(String(index), 'Shared product'))
+  await repository.importCatalog('Drinks', source(records), options())
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM products;').get().n, 1)
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM codes;').get().n, 5002)
+  assert.equal(database.prepare('SELECT COUNT(DISTINCT product_id) AS n FROM codes;').get().n, 1)
+  assert.deepEqual(database.prepare('PRAGMA foreign_key_check;').all(), [])
+})
+
+test('an existing barcode keeps its product when another barcode creates the incoming identity', async t => {
+  const { database, repository, source } = fixture(t)
+  database.exec(`INSERT INTO products (brand, name) VALUES ('User', 'Existing');
+    INSERT INTO codes (code, product_id) VALUES ('001', 1);`)
+  await repository.importCatalog('Drinks', source([product('001', 'Shared'), product('002', 'Shared')]), options())
+  assert.equal(database.prepare("SELECT product_id FROM codes WHERE code = '001';").get().product_id, 1)
+  assert.equal(database.prepare("SELECT catalog_id FROM codes WHERE code = '001';").get().catalog_id, null)
+  assert.notEqual(database.prepare("SELECT product_id FROM codes WHERE code = '002';").get().product_id, 1)
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM products;').get().n, 2)
+})
+
 test('sparse source IDs work without sending product records through JavaScript', async t => {
   const { database, adapter, repository, source } = fixture(t)
   const query = adapter.query
@@ -104,6 +171,24 @@ test('cancellation after inserting a batch restores the original database', asyn
   assert.equal(snapshot(), before)
 })
 
+test('cancellation rolls back new aliases of existing products as well as new products', async t => {
+  const { database, adapter, repository, snapshot, source } = fixture(t)
+  database.exec(`INSERT INTO products (brand, name) VALUES ('Brand', 'Shared');
+    INSERT INTO codes (code, product_id) VALUES ('old', 1);`)
+  const before = snapshot()
+  const controller = new AbortController()
+  const insert = adapter.executeSet
+  adapter.executeSet = async (...args) => {
+    await insert(...args)
+    assert.equal(database.prepare("SELECT product_id FROM codes WHERE code = 'alias';").get().product_id, 1)
+    controller.abort()
+  }
+  await assert.rejects(() => repository.importCatalog('Drinks', source([
+    product('alias', 'Shared'), product('new-product'),
+  ]), options(controller.signal)), { name: 'AbortError' })
+  assert.equal(snapshot(), before)
+})
+
 test('database insertion failure rolls back both tables and the catalog row', async t => {
   const { database, adapter, repository, snapshot, source } = fixture(t)
   const before = snapshot()
@@ -127,6 +212,47 @@ test('removal preserves collection products, their codes, and externally referen
   assert.deepEqual(database.prepare('SELECT code, catalog_id FROM codes ORDER BY code').all().map(row => ({ ...row })), [{ code: '001', catalog_id: null }, { code: 'manual', catalog_id: null }])
   assert.equal(database.prepare('SELECT COUNT(*) AS n FROM items').get().n, 1)
   assert.equal(await repository.removeCatalog('Food', options()), false)
+})
+
+test('removing either catalog preserves a product still referenced by another catalog', async t => {
+  const { database, repository, source } = fixture(t)
+  await repository.importCatalog('First', source([product('first', 'Shared')]), options())
+  const secondSource = source([product('second', 'Shared')])
+  await repository.importCatalog('Second', secondSource, options())
+  const owner = database.prepare('SELECT id, catalog_id FROM products;').get()
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM products;').get().n, 1)
+  assert.equal(database.prepare("SELECT product_id FROM codes WHERE code = 'second';").get().product_id, owner.id)
+
+  await repository.removeCatalog('Second', options())
+  assert.deepEqual(database.prepare('SELECT id, catalog_id FROM products;').get(), owner)
+  assert.equal(database.prepare("SELECT product_id FROM codes WHERE code = 'first';").get().product_id, owner.id)
+  assert.equal(database.prepare("SELECT COUNT(*) AS n FROM codes WHERE code = 'second';").get().n, 0)
+
+  await repository.importCatalog('Second', secondSource, options())
+  await repository.removeCatalog('First', options())
+  assert.equal(database.prepare('SELECT id, catalog_id FROM products;').get().id, owner.id)
+  assert.equal(database.prepare('SELECT catalog_id FROM products;').get().catalog_id, null)
+  assert.equal(database.prepare("SELECT product_id FROM codes WHERE code = 'second';").get().product_id, owner.id)
+  assert.equal(await repository.isCatalogInstalled('Second'), true)
+  assert.deepEqual(database.prepare('PRAGMA foreign_key_check;').all(), [])
+})
+
+test('removing catalogs retains collection products and all of their imported barcode aliases', async t => {
+  const { database, repository, source } = fixture(t)
+  database.exec(`INSERT INTO products (brand, name) VALUES ('Brand', 'Shared');
+    INSERT INTO collections (name) VALUES ('Drinks');
+    INSERT INTO items (collection_id, product_id) VALUES (1, 1);`)
+  await repository.importCatalog('First', source([product('first', 'Shared')]), options())
+  await repository.importCatalog('Second', source([product('second', 'Shared')]), options())
+  await repository.removeCatalog('First', options())
+  await repository.removeCatalog('Second', options())
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM products;').get().n, 1)
+  assert.equal(database.prepare('SELECT product_id FROM items;').get().product_id, 1)
+  const codes = database.prepare('SELECT code, product_id, catalog_id FROM codes ORDER BY code;').all()
+  assert.deepEqual(codes.map(row => ({ ...row })), [
+    { code: 'first', product_id: 1, catalog_id: null }, { code: 'second', product_id: 1, catalog_id: null },
+  ])
+  assert.deepEqual(database.prepare('PRAGMA foreign_key_check;').all(), [])
 })
 
 test('cancellation during removal restores deleted rows and catalog associations', async t => {

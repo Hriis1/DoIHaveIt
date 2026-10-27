@@ -114,7 +114,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
       count.textContent = `${total} ${total === 1 ? 'item' : 'items'}`
       const cards = result.items.map(item => {
         const card = template.content.cloneNode(true)
-        const label = `${item.brand}: ${item.name}${item.size === null ? '' : `(${item.size})`}`
+        const label = `${item.brand ? `${item.brand}: ` : ''}${item.name}${item.size === null ? '' : `(${item.size})`}`
         const figure = card.querySelector('figure')
         figure.setAttribute('aria-label', label)
         const caption = card.querySelector('.item-label')

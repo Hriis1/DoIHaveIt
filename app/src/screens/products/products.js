@@ -45,7 +45,7 @@ export function mountProductsScreen(container, { isNative, databaseReady }) {
       page = result.page
       const rows = result.products.map(product => {
         const row = template.content.cloneNode(true)
-        row.querySelector('.product-brand').textContent = product.brand
+        row.querySelector('.product-brand').textContent = product.brand || 'No brands'
         row.querySelector('.product-name').textContent = product.name
         row.querySelector('.product-size').textContent = product.size ?? 'Size not specified'
         const barcodes = row.querySelector('.product-barcodes')

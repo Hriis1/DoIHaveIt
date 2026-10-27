@@ -70,12 +70,22 @@ async function openDatabase() {
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS brands (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name VARCHAR(255) NOT NULL UNIQUE
+    );
+
     CREATE TABLE IF NOT EXISTS products (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      brand VARCHAR(255) NOT NULL,
       name VARCHAR(255) NOT NULL,
       size VARCHAR(255),
       catalog_id INTEGER REFERENCES catalogs(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS product_brands (
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      brand_id INTEGER NOT NULL REFERENCES brands(id),
+      PRIMARY KEY (product_id, brand_id)
     );
 
     CREATE TABLE IF NOT EXISTS codes (
@@ -101,9 +111,9 @@ async function openDatabase() {
     );
 
     CREATE INDEX IF NOT EXISTS products_catalog_id ON products(catalog_id);
-    -- Enforce product identity for both known and unknown sizes
-    CREATE UNIQUE INDEX IF NOT EXISTS products_brand_name_size ON products(brand, name, size) WHERE size IS NOT NULL;
-    CREATE UNIQUE INDEX IF NOT EXISTS products_brand_name_null_size ON products(brand, name) WHERE size IS NULL;
+    -- Match product candidates by name, size, and overlapping brands during import
+    CREATE INDEX IF NOT EXISTS products_name_size ON products(name, size);
+    CREATE INDEX IF NOT EXISTS product_brands_brand_id ON product_brands(brand_id, product_id);
     CREATE INDEX IF NOT EXISTS codes_catalog_id ON codes(catalog_id);
     CREATE INDEX IF NOT EXISTS codes_product_id ON codes(product_id);
     CREATE INDEX IF NOT EXISTS items_product_id ON items(product_id);

@@ -1,0 +1,44 @@
+<section class="products-screen" aria-labelledby="products-title">
+  <header class="products-heading">
+    <h1 id="products-title">Products</h1>
+    <p>Browse your available products.</p>
+  </header>
+
+  <fieldset class="products-modes">
+    <legend>Search by</legend>
+    <label><input type="radio" name="product-search-mode" value="text" checked />Text</label>
+    <label><input type="radio" name="product-search-mode" value="barcode" />Barcode</label>
+  </fieldset>
+  <div class="products-search">
+    <svg aria-hidden="true"><use href="#icon-search" /></svg>
+    <label for="product-search" class="products-sr">Search products</label>
+    <input id="product-search" type="search" placeholder="Search brand, name or size" aria-describedby="product-search-help" autocomplete="off" />
+  </div>
+  <p id="product-search-help">Each word can match the brand, name or size.</p>
+
+  <p class="products-message" role="status">Loading products…</p>
+  <p class="products-error error" role="alert" hidden></p>
+  <ul class="products-list" aria-label="Available products" aria-busy="true"></ul>
+  <section class="products-empty" hidden>
+    <h2>No products yet</h2>
+    <p>Products from catalogs will appear here.</p>
+  </section>
+
+  <footer class="products-footer" hidden>
+    <nav class="products-pagination" aria-label="Product pages">
+      <button class="products-previous secondary-button" type="button" aria-label="Previous page" disabled><svg aria-hidden="true"><use href="#icon-chevron-left" /></svg></button>
+      <span class="products-page" role="status" aria-live="polite"></span>
+      <button class="products-next secondary-button" type="button" aria-label="Next page" disabled><svg aria-hidden="true"><use href="#icon-chevron-right" /></svg></button>
+    </nav>
+    <p class="products-range"></p>
+  </footer>
+
+  <template class="product-template">
+    <li class="product-row">
+      <p class="product-brand"></p>
+      <h2 class="product-name"></h2>
+      <p class="product-size"></p>
+      <dl><dt>Barcodes</dt><dd class="product-barcodes"></dd></dl>
+    </li>
+  </template>
+</section>

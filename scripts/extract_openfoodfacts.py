@@ -39,10 +39,44 @@ MULTIPACK_DESCRIPTION = re.compile(
     re.IGNORECASE,
 )
 AMBIGUOUS_PACK_DESCRIPTION = re.compile(r"\b(?:packs?|cases?|box(?:es)?|sets?|bogo)\b|\+", re.IGNORECASE)
+COMPANY_WORDS = (
+    "company", "companies", "corporation", "incorporated", "limited",
+    "compagnie", "societe", "société", "gesellschaft", "компания", "фирма",
+)
+COMPANY_ABBREVIATIONS = (
+    "co", "corp", "inc", "ltd", "llc", "plc", "llp", "gmbh", "ag", "kg",
+    "sarl", "sas", "sa", "srl", "spa", "bv", "nv", "oy", "ab", "aps",
+    "ood", "eood", "ad", "ead", "оод", "еоод", "ад", "еад", "ооо", "пао", "зао",
+)
+COMPANY_SUFFIX = re.compile(
+    r"(?:^|\s+)(?:" + "|".join([
+        *(re.escape(word) for word in COMPANY_WORDS),
+        *(r"\.?".join(re.escape(letter) for letter in suffix) + r"\.?" for suffix in COMPANY_ABBREVIATIONS),
+    ]) + r")[.;]*$",
+    re.IGNORECASE,
+)
 
 
 def get_text(value):
     return value.strip() if isinstance(value, str) else ""
+
+
+def get_brand(value):
+    original = get_text(value)
+    parts = []
+    changed = False
+    # Strip trailing company suffixes separately from each comma-separated brand
+    for part in original.split(","):
+        brand = part.strip()
+        while True:
+            match = COMPANY_SUFFIX.search(brand)
+            if not match:
+                break
+            brand = brand[:match.start()].rstrip()
+            changed = True
+        if brand:
+            parts.append(brand)
+    return ", ".join(parts) if changed else original
 
 
 def get_languages(product, available):
@@ -124,7 +158,7 @@ def get_item_status(product):
 def get_product(product):
     # Require identifying fields without inventing missing brand or product names
     barcode = get_text(product.get("code"))
-    brand = get_text(product.get("brands"))
+    brand = get_brand(product.get("brands"))
     name = get_name(product)
     if not barcode or not brand or not name:
         return None
@@ -211,6 +245,7 @@ def extract(source, output, tags=None):
         "license_url": "https://openfoodfacts.github.io/documentation/docs/Product-Opener/api/tutorials/license-be-on-the-legal-side/",
         "notes": [
             "International coverage; no country filter.",
+            "Recognized trailing company words and legal suffixes are removed from each comma-separated brand; internal words and original casing are preserved.",
             "Identifiable multipacks are excluded using quantity, product descriptions, and recognized packaging container counts.",
             "Uncertain records, plain weights or volumes, and missing or incomplete packaging data are retained when no multipack evidence is recognized. Undetected multipacks may remain.",
             "Missing sizes are null. Prefer the English product name, then product_name, then the product's language and other available languages; retain the selected text without translation.",

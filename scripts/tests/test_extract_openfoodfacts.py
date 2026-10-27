@@ -32,6 +32,41 @@ class ExtractProductsTests(unittest.TestCase):
         self.assertEqual(product["name"], "Chocolat")
         self.assertEqual(product["size"], "350 g")
 
+    def test_trailing_company_suffixes_are_removed(self):
+        suffixes = (
+            "Company", "Companies", "Co.", "Corporation", "Corp.", "Inc.", "Incorporated",
+            "Limited", "Ltd.", "LLC", "L.L.C.", "PLC", "LLP", "GmbH", "AG", "KG",
+            "SARL", "S.A.R.L.", "SAS", "S.A.", "SRL", "SpA", "BV", "NV", "Oy", "AB", "ApS",
+            "OOD", "EOOD", "AD", "EAD", "ООД", "ЕООД", "АД", "ЕАД", "ООО", "ПАО", "ЗАО",
+            "Compagnie", "Société", "Gesellschaft", "Компания", "Фирма",
+        )
+        for suffix in suffixes:
+            with self.subTest(suffix=suffix):
+                product = get_product({"code": "001", "brands": f"Monster Energy {suffix}", "product_name": "Drink"})
+                self.assertEqual(product["brand"], "Monster Energy")
+        product = get_product({"code": "001", "brands": "monster energy company", "product_name": "Drink"})
+        self.assertEqual(product["brand"], "monster energy")
+
+    def test_company_suffixes_are_removed_from_each_brand_and_in_chains(self):
+        examples = {
+            "Monster Energy Company, Other GmbH": "Monster Energy, Other",
+            "Acme Company Ltd.": "Acme",
+            "Acme, Inc., Other Co.": "Acme, Other",
+            "Acme Co.,Ltd.": "Acme",
+        }
+        for brands, expected in examples.items():
+            with self.subTest(brands=brands):
+                product = get_product({"code": "001", "brands": brands, "product_name": "Drink"})
+                self.assertEqual(product["brand"], expected)
+
+    def test_internal_company_words_and_word_boundaries_are_preserved(self):
+        for brand in ("Company of Cooks", "Company Store", "Cooperative", "Coco", "Acme GmbH Foods", "Nestlé,  Other"):
+            with self.subTest(brand=brand):
+                product = get_product({"code": "001", "brands": brand, "product_name": "Company Drink"})
+                self.assertEqual(product["brand"], brand)
+                self.assertEqual(product["name"], "Company Drink")
+        self.assertIsNone(get_product({"code": "001", "brands": "Company, Ltd.", "product_name": "Drink"}))
+
     def test_english_name_precedes_main_name_and_language_fallbacks(self):
         base = {
             "code": "5056784903766", "brands": "Monster Energy", "lang": "nb",

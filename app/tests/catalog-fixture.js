@@ -8,6 +8,17 @@ import { createCatalogRepository } from '../src/repositories/catalogRepo.js'
 export const product = (barcode, name = `Product ${barcode}`) => ({ barcode, brand: 'Brand', name, size: null })
 export const options = signal => ({ signal, onProgress: () => {} })
 
+export function addProduct(database, { id = null, brand, name, size = null, catalog_id = null }) {
+  const result = database.prepare('INSERT INTO products (id, name, size, catalog_id) VALUES (?, ?, ?, ?)').run(id, name, size, catalog_id)
+  const productId = Number(result.lastInsertRowid)
+  for (const label of [...new Set(brand.split(',').map(value => value.trim()).filter(Boolean))]) {
+    database.prepare('INSERT INTO brands (name) VALUES (?) ON CONFLICT DO NOTHING').run(label)
+    const { id: brandId } = database.prepare('SELECT id FROM brands WHERE name = ?').get(label)
+    database.prepare('INSERT INTO product_brands VALUES (?, ?)').run(productId, brandId)
+  }
+  return productId
+}
+
 export function temporaryDirectory(t) {
   const root = resolve(tmpdir())
   const folder = mkdtempSync(join(root, 'doihaveit-catalog-'))
@@ -57,7 +68,7 @@ export function fixture(t) {
     close: async () => database.close(),
   }
   const repository = createCatalogRepository(operation => operation(adapter))
-  const snapshot = () => JSON.stringify(['catalogs', 'products', 'codes', 'items', 'collections'].map(table =>
+  const snapshot = () => JSON.stringify(['catalogs', 'brands', 'products', 'product_brands', 'codes', 'items', 'collections'].map(table =>
     database.prepare(`SELECT * FROM ${table} ORDER BY rowid;`).all()))
   let sequence = 0
   return { database, adapter, repository, snapshot, source: records => createSource(folder, records, `source ${++sequence}'s.sqlite`) }

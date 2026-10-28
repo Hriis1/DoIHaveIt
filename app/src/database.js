@@ -117,6 +117,12 @@ async function openDatabase() {
     CREATE INDEX IF NOT EXISTS codes_catalog_id ON codes(catalog_id);
     CREATE INDEX IF NOT EXISTS codes_product_id ON codes(product_id);
     CREATE INDEX IF NOT EXISTS items_product_id ON items(product_id);
+
+    -- Keep batch merge targets on the shared connection without storing product data in JavaScript
+    CREATE TEMP TABLE IF NOT EXISTS catalog_import_merges (
+      product_id INTEGER PRIMARY KEY,
+      target_id INTEGER NOT NULL
+    );
   `)
 
   return database

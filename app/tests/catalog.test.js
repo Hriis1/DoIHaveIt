@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite'
 import test from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { decompressGzip } from '../src/modules/catalog/gzip.js'
-import { fixture, temporaryDirectory, createSource, product, options } from './catalog-fixture.js'
+import { fixture, temporaryDirectory, createSource, product, options, addProduct } from './catalog-fixture.js'
 import worker from '../../cloudflareWorkers/src/index.js'
 
 async function* chunks(bytes, size = 13) {
@@ -35,9 +35,9 @@ test('gzip CRC corruption, truncation, non-gzip and trailing data are rejected',
 
 test('SQL merge skips existing barcodes, respects product ID history and leaves the source unchanged', async t => {
   const { database, repository, source } = fixture(t)
-  database.exec(`INSERT INTO products (id, brand, name) VALUES (1, 'User', 'Existing');
-    INSERT INTO codes (code, product_id) VALUES ('001', 1);
-    INSERT INTO products (id, brand, name) VALUES (100, 'Deleted', 'Deleted'); DELETE FROM products WHERE id = 100;`)
+  addProduct(database, { id: 1, brand: 'User', name: 'Existing' })
+  addProduct(database, { id: 100, brand: 'Deleted', name: 'Deleted' })
+  database.exec(`INSERT INTO codes (code, product_id) VALUES ('001', 1); DELETE FROM products WHERE id = 100;`)
   const path = source([product('001'), product('002', 'Кисело мляко'), { ...product('003'), size: '1 L' }])
   const before = readFileSync(path)
   assert.equal(await repository.importCatalog('Food', path, options()), true)
@@ -56,10 +56,10 @@ test('SQL merge skips existing barcodes, respects product ID history and leaves 
 
 test('new barcodes reuse existing products after trimming and preserve catalog ownership', async t => {
   const { database, repository, source } = fixture(t)
-  database.exec(`INSERT INTO catalogs (name) VALUES ('Existing');
-    INSERT INTO products (id, brand, name, size, catalog_id) VALUES
-      (10, 'monster', 'classic', NULL, NULL), (20, 'monster', 'classic', '500 ml', 1);
-    INSERT INTO codes (code, product_id, catalog_id) VALUES ('old-null', 10, NULL), ('old-sized', 20, 1);`)
+  database.exec("INSERT INTO catalogs (name) VALUES ('Existing');")
+  addProduct(database, { id: 10, brand: 'monster', name: 'classic' })
+  addProduct(database, { id: 20, brand: 'monster', name: 'classic', size: '500 ml', catalog_id: 1 })
+  database.exec("INSERT INTO codes (code, product_id, catalog_id) VALUES ('old-null', 10, NULL), ('old-sized', 20, 1);")
   const before = database.prepare('SELECT * FROM products ORDER BY id;').all()
   await repository.importCatalog('Drinks', source([
     { barcode: 'new-null', brand: ' monster ', name: ' classic ', size: null },
@@ -112,8 +112,8 @@ test('matching products across import batches share one product', async t => {
 
 test('an existing barcode keeps its product when another barcode creates the incoming identity', async t => {
   const { database, repository, source } = fixture(t)
-  database.exec(`INSERT INTO products (brand, name) VALUES ('User', 'Existing');
-    INSERT INTO codes (code, product_id) VALUES ('001', 1);`)
+  addProduct(database, { brand: 'User', name: 'Existing' })
+  database.exec("INSERT INTO codes (code, product_id) VALUES ('001', 1);")
   await repository.importCatalog('Drinks', source([product('001', 'Shared'), product('002', 'Shared')]), options())
   assert.equal(database.prepare("SELECT product_id FROM codes WHERE code = '001';").get().product_id, 1)
   assert.equal(database.prepare("SELECT catalog_id FROM codes WHERE code = '001';").get().catalog_id, null)
@@ -173,8 +173,8 @@ test('cancellation after inserting a batch restores the original database', asyn
 
 test('cancellation rolls back new aliases of existing products as well as new products', async t => {
   const { database, adapter, repository, snapshot, source } = fixture(t)
-  database.exec(`INSERT INTO products (brand, name) VALUES ('Brand', 'Shared');
-    INSERT INTO codes (code, product_id) VALUES ('old', 1);`)
+  addProduct(database, { brand: 'Brand', name: 'Shared' })
+  database.exec("INSERT INTO codes (code, product_id) VALUES ('old', 1);")
   const before = snapshot()
   const controller = new AbortController()
   const insert = adapter.executeSet
@@ -193,7 +193,7 @@ test('database insertion failure rolls back both tables and the catalog row', as
   const { database, adapter, repository, snapshot, source } = fixture(t)
   const before = snapshot()
   adapter.executeSet = async statements => {
-    database.prepare(statements[0].statement).run(...statements[0].values)
+    for (const { statement, values } of statements.slice(0, 3)) database.prepare(statement).run(...values)
     throw new Error('Simulated disk error')
   }
   await assert.rejects(() => repository.importCatalog('Food', source([product('001')]), options()), /disk error/)
@@ -239,8 +239,8 @@ test('removing either catalog preserves a product still referenced by another ca
 
 test('removing catalogs retains collection products and all of their imported barcode aliases', async t => {
   const { database, repository, source } = fixture(t)
-  database.exec(`INSERT INTO products (brand, name) VALUES ('Brand', 'Shared');
-    INSERT INTO collections (name) VALUES ('Drinks');
+  addProduct(database, { brand: 'Brand', name: 'Shared' })
+  database.exec(`INSERT INTO collections (name) VALUES ('Drinks');
     INSERT INTO items (collection_id, product_id) VALUES (1, 1);`)
   await repository.importCatalog('First', source([product('first', 'Shared')]), options())
   await repository.importCatalog('Second', source([product('second', 'Shared')]), options())
@@ -272,13 +272,15 @@ test('process termination before commit leaves no catalog rows after SQLite reco
   const sourcePath = createSource(folder, Array.from({ length: 5000 }, (_, index) => product(String(index))))
   const database = new DatabaseSync(targetPath)
   const source = readFileSync(new URL('../src/database.js', import.meta.url), 'utf8')
-  database.exec(source.match(/await database\.execute\(`([\s\S]*?)`\)/)[1])
-  database.exec("INSERT INTO products (brand, name) VALUES ('User', 'Existing');")
+  const schema = source.match(/await database\.execute\(`([\s\S]*?)`\)/)[1]
+  database.exec(schema)
+  addProduct(database, { brand: 'User', name: 'Existing' })
   database.close()
   const script = `
     import { DatabaseSync } from 'node:sqlite'
     import { createCatalogRepository } from './src/repositories/catalogRepo.js'
     const database = new DatabaseSync(process.argv[1])
+    database.exec(${JSON.stringify(schema)})
     database.exec('PRAGMA journal_mode = DELETE; PRAGMA cache_size = 10; PRAGMA synchronous = FULL;')
     const adapter = {
       query: async (sql, values = []) => ({ values: database.prepare(sql).all(...values) }),

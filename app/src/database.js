@@ -107,6 +107,23 @@ async function openDatabase() {
     CREATE INDEX IF NOT EXISTS codes_catalog_id ON codes(catalog_id);
     CREATE INDEX IF NOT EXISTS codes_product_id ON codes(product_id);
     CREATE INDEX IF NOT EXISTS items_product_id ON items(product_id);
+
+    -- Resolve size matching for each import batch without retaining source rows in JavaScript
+    CREATE TEMP TABLE IF NOT EXISTS catalog_import_rows (
+      source_id INTEGER PRIMARY KEY,
+      brand TEXT NOT NULL,
+      name TEXT NOT NULL,
+      size TEXT
+    );
+    CREATE INDEX IF NOT EXISTS temp.catalog_import_rows_identity ON catalog_import_rows(brand, name, source_id);
+    CREATE TEMP TABLE IF NOT EXISTS catalog_import_sizes (
+      brand TEXT NOT NULL,
+      name TEXT NOT NULL,
+      known_count INTEGER NOT NULL,
+      first_size TEXT,
+      ambiguous_after INTEGER,
+      PRIMARY KEY (brand, name)
+    );
   `)
 
   return database

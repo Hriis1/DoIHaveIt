@@ -58,13 +58,13 @@ test('new barcodes reuse existing products after trimming and preserve catalog o
   const { database, repository, source } = fixture(t)
   database.exec(`INSERT INTO catalogs (name) VALUES ('Existing');
     INSERT INTO products (id, brand, name, size, catalog_id) VALUES
-      (10, 'monster', 'classic', NULL, NULL), (20, 'monster', 'classic', '500 ml', 1);
+      (10, 'monster', 'unknown classic', NULL, NULL), (20, 'monster', 'classic', '500 ml', 1);
     INSERT INTO codes (code, product_id, catalog_id) VALUES ('old-null', 10, NULL), ('old-sized', 20, 1);`)
   const before = database.prepare('SELECT * FROM products ORDER BY id;').all()
   await repository.importCatalog('Drinks', source([
-    { barcode: 'new-null', brand: ' monster ', name: ' classic ', size: null },
+    { barcode: 'new-null', brand: ' monster ', name: ' unknown classic ', size: null },
     { barcode: 'new-sized', brand: 'monster', name: 'classic', size: ' 500 ml ' },
-    { barcode: 'new-empty', brand: 'monster', name: 'classic', size: ' ' },
+    { barcode: 'new-empty', brand: 'monster', name: 'unknown classic', size: ' ' },
   ]), options())
   assert.deepEqual(database.prepare('SELECT * FROM products ORDER BY id;').all(), before)
   const codes = database.prepare('SELECT code, product_id, catalog_id FROM codes ORDER BY code;').all()
@@ -93,10 +93,11 @@ test('matching products in a batch share an identity while exact differences sta
   await repository.importCatalog('Drinks', source(records), options())
   const ids = Object.fromEntries(database.prepare('SELECT code, product_id FROM codes;').all().map(row => [row.code, row.product_id]))
   assert.equal(ids['null-a'], ids['null-b'])
+  assert.equal(ids['null-a'], ids['sized-a'])
   assert.equal(ids['sized-a'], ids['sized-b'])
-  const distinct = ['null-a', 'sized-a', 'smaller', 'size-spelling', 'brand-case', 'name-case']
-  assert.equal(new Set(distinct.map(code => ids[code])).size, 6)
-  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM products;').get().n, 6)
+  const distinct = ['sized-a', 'smaller', 'size-spelling', 'brand-case', 'name-case']
+  assert.equal(new Set(distinct.map(code => ids[code])).size, 5)
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM products;').get().n, 5)
   assert.equal(database.prepare('SELECT COUNT(*) AS n FROM codes;').get().n, records.length)
 })
 
@@ -193,7 +194,10 @@ test('database insertion failure rolls back both tables and the catalog row', as
   const { database, adapter, repository, snapshot, source } = fixture(t)
   const before = snapshot()
   adapter.executeSet = async statements => {
-    database.prepare(statements[0].statement).run(...statements[0].values)
+    for (const { statement, values } of statements) {
+      database.prepare(statement).run(...values)
+      if (statement.startsWith('INSERT INTO main.products')) break
+    }
     throw new Error('Simulated disk error')
   }
   await assert.rejects(() => repository.importCatalog('Food', source([product('001')]), options()), /disk error/)
@@ -272,13 +276,15 @@ test('process termination before commit leaves no catalog rows after SQLite reco
   const sourcePath = createSource(folder, Array.from({ length: 5000 }, (_, index) => product(String(index))))
   const database = new DatabaseSync(targetPath)
   const source = readFileSync(new URL('../src/database.js', import.meta.url), 'utf8')
-  database.exec(source.match(/await database\.execute\(`([\s\S]*?)`\)/)[1])
+  const schema = source.match(/await database\.execute\(`([\s\S]*?)`\)/)[1]
+  database.exec(schema)
   database.exec("INSERT INTO products (brand, name) VALUES ('User', 'Existing');")
   database.close()
   const script = `
     import { DatabaseSync } from 'node:sqlite'
     import { createCatalogRepository } from './src/repositories/catalogRepo.js'
     const database = new DatabaseSync(process.argv[1])
+    database.exec(${JSON.stringify(schema)})
     database.exec('PRAGMA journal_mode = DELETE; PRAGMA cache_size = 10; PRAGMA synchronous = FULL;')
     const adapter = {
       query: async (sql, values = []) => ({ values: database.prepare(sql).all(...values) }),

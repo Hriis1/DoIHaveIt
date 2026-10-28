@@ -77,35 +77,97 @@ export function createCatalogRepository(access = withDatabaseAccess) {
     `, [afterId, lastId])
     if (invalid.length) throw new Error('The catalog contains a product with invalid or missing fields.')
     checkCancellation(signal)
-    // Reserve local IDs and let the identity indexes reuse products within and across batches
+    // Resolve missing sizes in source order, retaining earlier links if another size appears later
     await database.executeSet([
+      { statement: 'DELETE FROM temp.catalog_import_rows;', values: [] },
+      { statement: 'DELETE FROM temp.catalog_import_sizes;', values: [] },
+      {
+        statement: `INSERT INTO temp.catalog_import_rows (source_id, brand, name, size)
+          SELECT source_id, trim(brand), trim(name),
+            CASE WHEN lower(trim(size)) = 'null' THEN NULL ELSE NULLIF(trim(size), '') END
+          FROM catalog_source.catalog_products AS source
+          WHERE source_id > ? AND source_id <= ?
+            AND NOT EXISTS (SELECT 1 FROM main.codes WHERE code = source.barcode);`,
+        values: [afterId, lastId],
+      },
+      {
+        statement: `INSERT INTO temp.catalog_import_sizes (brand, name, known_count, first_size)
+          SELECT identities.brand, identities.name, (
+            SELECT COUNT(*) FROM main.products AS p
+            WHERE p.brand = identities.brand AND p.name = identities.name AND p.size IS NOT NULL
+          ), COALESCE((
+            SELECT p.size FROM main.products AS p
+            WHERE p.brand = identities.brand AND p.name = identities.name AND p.size IS NOT NULL
+            ORDER BY p.size LIMIT 1
+          ), (
+            SELECT incoming.size FROM temp.catalog_import_rows AS incoming
+            WHERE incoming.brand = identities.brand AND incoming.name = identities.name AND incoming.size IS NOT NULL
+            ORDER BY incoming.source_id LIMIT 1
+          )) FROM (SELECT DISTINCT brand, name FROM temp.catalog_import_rows) AS identities;`,
+        values: [],
+      },
+      {
+        statement: `UPDATE temp.catalog_import_sizes SET ambiguous_after = (
+          SELECT MIN(incoming.source_id) FROM temp.catalog_import_rows AS incoming
+          WHERE incoming.brand = catalog_import_sizes.brand AND incoming.name = catalog_import_sizes.name
+            AND incoming.size <> catalog_import_sizes.first_size
+        );`,
+        values: [],
+      },
+      {
+        // Skip only missing-size rows that arrive after more than one size is known
+        statement: `DELETE FROM temp.catalog_import_rows WHERE size IS NULL AND EXISTS (
+          SELECT 1 FROM temp.catalog_import_sizes AS sizes
+          WHERE sizes.brand = catalog_import_rows.brand AND sizes.name = catalog_import_rows.name
+            AND (sizes.known_count > 1 OR catalog_import_rows.source_id > sizes.ambiguous_after)
+        );`,
+        values: [],
+      },
+      {
+        statement: `UPDATE temp.catalog_import_rows SET size = (
+          SELECT first_size FROM temp.catalog_import_sizes AS sizes
+          WHERE sizes.brand = catalog_import_rows.brand AND sizes.name = catalog_import_rows.name
+        ) WHERE size IS NULL;`,
+        values: [],
+      },
+      {
+        // Enrich an existing unknown-size product without changing its barcode or collection references
+        statement: `UPDATE main.products SET size = (
+          SELECT incoming.size FROM temp.catalog_import_rows AS incoming
+          WHERE incoming.brand = products.brand AND incoming.name = products.name AND incoming.size IS NOT NULL
+          ORDER BY incoming.source_id LIMIT 1
+        ) WHERE id IN (
+          SELECT p.id FROM temp.catalog_import_rows AS incoming
+          JOIN main.products AS p ON p.brand = incoming.brand AND p.name = incoming.name AND p.size IS NULL
+          WHERE incoming.size IS NOT NULL
+        );`,
+        values: [],
+      },
       {
         statement: `INSERT INTO main.products (id, brand, name, size, catalog_id)
-          SELECT ? + source.source_id, trim(source.brand), trim(source.name), NULLIF(trim(source.size), ''), ?
-          FROM catalog_source.catalog_products AS source
-          WHERE source.source_id > ? AND source.source_id <= ?
-            AND NOT EXISTS (SELECT 1 FROM main.codes WHERE code = source.barcode)
-          ORDER BY source.source_id
+          SELECT ? + source_id, brand, name, size, ? FROM temp.catalog_import_rows
+          WHERE 1 ORDER BY source_id
           ON CONFLICT DO NOTHING;`,
-        values: [baseId, catalogId, afterId, lastId],
+        values: [baseId, catalogId],
       },
       // Separate size lookups use the unique indexes for both known and null sizes
       {
         statement: `INSERT INTO main.codes (code, product_id, catalog_id)
           SELECT source.barcode,
-            CASE WHEN NULLIF(trim(source.size), '') IS NULL THEN (
+            CASE WHEN incoming.size IS NULL THEN (
               SELECT id FROM main.products
-              WHERE brand = trim(source.brand) AND name = trim(source.name) AND size IS NULL
+              WHERE brand = incoming.brand AND name = incoming.name AND size IS NULL
             ) ELSE (
               SELECT id FROM main.products
-              WHERE brand = trim(source.brand) AND name = trim(source.name) AND size = trim(source.size)
+              WHERE brand = incoming.brand AND name = incoming.name AND size = incoming.size
             ) END, ?
-          FROM catalog_source.catalog_products AS source
-          WHERE source.source_id > ? AND source.source_id <= ?
-            AND NOT EXISTS (SELECT 1 FROM main.codes WHERE code = source.barcode)
+          FROM temp.catalog_import_rows AS incoming
+          JOIN catalog_source.catalog_products AS source ON source.source_id = incoming.source_id
           ORDER BY source.source_id;`,
-        values: [catalogId, afterId, lastId],
+        values: [catalogId],
       },
+      { statement: 'DELETE FROM temp.catalog_import_rows;', values: [] },
+      { statement: 'DELETE FROM temp.catalog_import_sizes;', values: [] },
     ], false)
   }
 

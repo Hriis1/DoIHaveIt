@@ -1,5 +1,4 @@
 import { withDatabaseAccess } from '../database.js'
-import { productBrandNamesSql } from './productBrands.js'
 
 // Accept the connection scheduler so product searches can be tested with real SQLite
 export function createProductRepository(access = withDatabaseAccess) {
@@ -10,7 +9,7 @@ export function createProductRepository(access = withDatabaseAccess) {
       const parameters = mode === 'barcode' ? (query ? [query] : []) : terms
       const conditions = mode === 'barcode'
         ? (query ? ['p.id = (SELECT product_id FROM codes WHERE code = ?)'] : [])
-        : terms.map(() => `instr(lower(${productBrandNamesSql} || ' ' || p.name || ' ' || COALESCE(p.size, '')), lower(?)) > 0`)
+        : terms.map(() => "instr(lower(p.brand || ' ' || p.name || ' ' || COALESCE(p.size, '')), lower(?)) > 0")
       const filter = `FROM products AS p${conditions.length ? ` WHERE ${conditions.join(' AND ')}` : ''}`
 
       // Count matching products independently of how many barcodes they have
@@ -19,8 +18,8 @@ export function createProductRepository(access = withDatabaseAccess) {
       const totalPages = Math.max(1, Math.ceil(total / pageSize))
       const currentPage = Math.max(1, Math.min(page, totalPages))
       const { values } = await database.query(`
-        SELECT p.id, ${productBrandNamesSql} AS brand, p.name, p.size ${filter}
-        ORDER BY brand COLLATE NOCASE, p.name COLLATE NOCASE, p.size COLLATE NOCASE, p.id
+        SELECT p.id, p.brand, p.name, p.size ${filter}
+        ORDER BY p.brand COLLATE NOCASE, p.name COLLATE NOCASE, p.size COLLATE NOCASE, p.id
         LIMIT ? OFFSET ?;
       `, [...parameters, pageSize, (currentPage - 1) * pageSize])
       const products = (values ?? []).map(product => ({ ...product, barcodes: [] }))
@@ -53,7 +52,7 @@ export async function getProductByBarcode(barcode) {
   return withDatabaseAccess(async database => {
     for (const code of barcodes) {
       const { values } = await database.query(`
-        SELECT ${productBrandNamesSql} AS brand, p.name, p.size, c.code
+        SELECT p.brand, p.name, p.size, c.code
         FROM codes AS c
         JOIN products AS p ON p.id = c.product_id
         WHERE c.code = ?;

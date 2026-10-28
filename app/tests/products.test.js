@@ -7,12 +7,7 @@ function productsFixture(t) {
   const { database, adapter } = fixture(t)
   const repository = createProductRepository(operation => operation(adapter))
   const add = (brand, name, size = null, barcodes = []) => {
-    const { lastInsertRowid: id } = database.prepare('INSERT INTO products (name, size) VALUES (?, ?)').run(name, size)
-    for (const label of Array.isArray(brand) ? brand : [brand]) {
-      database.prepare('INSERT INTO brands (name) VALUES (?) ON CONFLICT DO NOTHING').run(label)
-      const { id: brandId } = database.prepare('SELECT id FROM brands WHERE name = ?').get(label)
-      database.prepare('INSERT INTO product_brands VALUES (?, ?)').run(id, brandId)
-    }
+    const { lastInsertRowid: id } = database.prepare('INSERT INTO products (brand, name, size) VALUES (?, ?, ?)').run(brand, name, size)
     for (const barcode of barcodes) database.prepare('INSERT INTO codes (code, product_id) VALUES (?, ?)').run(barcode, id)
     return Number(id)
   }
@@ -99,33 +94,4 @@ test('sorts by brand, name and size and paginates products in groups of twelve',
 test('an empty result has one empty page', async t => {
   const { repository } = productsFixture(t)
   assert.deepEqual(await repository.getProducts({ page: 2 }), { products: [], total: 0, page: 1, totalPages: 1 })
-})
-
-test('multiple brands are displayed and searched without duplicating products or barcodes', async t => {
-  const { repository, add } = productsFixture(t)
-  const id = add(['zaza', 'Marks & Spencers', 'Marks & Spencer'], 'Five hop lager beer', '330 ml', ['00024655', '00024656'])
-  add('Other', 'Five hop lager beer', '330 ml')
-  const result = await repository.getProducts()
-  assert.equal(result.total, 2)
-  assert.equal(result.products[0].id, id)
-  assert.equal(result.products[0].brand, 'Marks & Spencer, Marks & Spencers, zaza')
-  assert.deepEqual(result.products[0].barcodes, ['00024655', '00024656'])
-  for (const search of ['zaza 330', 'marks spencers lager', 'marks zaza']) {
-    const matches = await repository.getProducts({ search })
-    assert.equal(matches.total, 1)
-    assert.equal(matches.products[0].id, id)
-    assert.equal(matches.products[0].brand, result.products[0].brand)
-  }
-  const exact = await repository.getProducts({ mode: 'barcode', search: '00024656' })
-  assert.equal(exact.products[0].brand, result.products[0].brand)
-  assert.deepEqual(exact.products[0].barcodes, ['00024655', '00024656'])
-})
-
-test('products without brands still appear and can be searched by name and size', async t => {
-  const { repository, add } = productsFixture(t)
-  const id = add([], 'Unbranded drink', '500 ml')
-  const result = await repository.getProducts({ search: 'drink 500' })
-  assert.equal(result.total, 1)
-  assert.equal(result.products[0].id, id)
-  assert.equal(result.products[0].brand, '')
 })

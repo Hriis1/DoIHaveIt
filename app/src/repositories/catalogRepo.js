@@ -70,118 +70,42 @@ export function createCatalogRepository(access = withDatabaseAccess) {
       SELECT 1 AS invalid FROM catalog_source.catalog_products
       WHERE source_id > ? AND source_id <= ? AND (
         typeof(barcode) <> 'text' OR trim(barcode) = '' OR barcode <> trim(barcode)
-        OR typeof(brand) <> 'text' OR trim(replace(brand, ',', '')) = ''
+        OR typeof(brand) <> 'text' OR trim(brand) = ''
         OR typeof(name) <> 'text' OR trim(name) = ''
         OR (size IS NOT NULL AND typeof(size) <> 'text')
       ) LIMIT 1;
     `, [afterId, lastId])
     if (invalid.length) throw new Error('The catalog contains a product with invalid or missing fields.')
     checkCancellation(signal)
-    // Split brands inside SQLite and ignore rows whose barcodes are already installed
-    const brandParts = `WITH RECURSIVE brand_parts(source_id, remaining, brand) AS (
-      SELECT source_id, brand || ',', '' FROM catalog_source.catalog_products AS source
-      WHERE source_id > ? AND source_id <= ?
-        AND NOT EXISTS (SELECT 1 FROM main.codes WHERE code = source.barcode)
-      UNION ALL
-      SELECT source_id, substr(remaining, instr(remaining, ',') + 1),
-        trim(substr(remaining, 1, instr(remaining, ',') - 1))
-      FROM brand_parts WHERE remaining <> ''
-    )`
+    // Reserve local IDs and let the identity indexes reuse products within and across batches
     await database.executeSet([
-      { statement: 'DELETE FROM temp.catalog_import_merges;', values: [] },
       {
-        statement: `INSERT INTO main.products (id, name, size, catalog_id)
-          SELECT ? + source.source_id, trim(source.name), NULLIF(trim(source.size), ''), ?
+        statement: `INSERT INTO main.products (id, brand, name, size, catalog_id)
+          SELECT ? + source.source_id, trim(source.brand), trim(source.name), NULLIF(trim(source.size), ''), ?
           FROM catalog_source.catalog_products AS source
           WHERE source.source_id > ? AND source.source_id <= ?
             AND NOT EXISTS (SELECT 1 FROM main.codes WHERE code = source.barcode)
-          ORDER BY source.source_id;`,
+          ORDER BY source.source_id
+          ON CONFLICT DO NOTHING;`,
         values: [baseId, catalogId, afterId, lastId],
       },
+      // Separate size lookups use the unique indexes for both known and null sizes
       {
-        statement: `${brandParts}
-          INSERT INTO main.brands (name)
-          SELECT DISTINCT brand FROM brand_parts WHERE brand <> ''
-          ON CONFLICT(name) DO NOTHING;`,
-        values: [afterId, lastId],
-      },
-      {
-        statement: `${brandParts}
-          INSERT INTO main.product_brands (product_id, brand_id)
-          SELECT DISTINCT ? + parts.source_id, brands.id FROM brand_parts AS parts
-          JOIN main.brands AS brands ON brands.name = parts.brand
-          WHERE parts.brand <> '';`,
-        values: [afterId, lastId, baseId],
-      },
-      {
-        // Every new barcode starts with its reserved product before connected products are merged
         statement: `INSERT INTO main.codes (code, product_id, catalog_id)
-          SELECT source.barcode, ? + source.source_id, ?
+          SELECT source.barcode,
+            CASE WHEN NULLIF(trim(source.size), '') IS NULL THEN (
+              SELECT id FROM main.products
+              WHERE brand = trim(source.brand) AND name = trim(source.name) AND size IS NULL
+            ) ELSE (
+              SELECT id FROM main.products
+              WHERE brand = trim(source.brand) AND name = trim(source.name) AND size = trim(source.size)
+            ) END, ?
           FROM catalog_source.catalog_products AS source
           WHERE source.source_id > ? AND source.source_id <= ?
             AND NOT EXISTS (SELECT 1 FROM main.codes WHERE code = source.barcode)
           ORDER BY source.source_id;`,
-        values: [baseId, catalogId, afterId, lastId],
+        values: [catalogId, afterId, lastId],
       },
-      {
-        // Walk brand connections for each name/size, including bridges between existing products
-        statement: `WITH RECURSIVE reachable(seed, brand_id, name, size) AS (
-          SELECT DISTINCT pb.brand_id, pb.brand_id, p.name, p.size
-          FROM main.products AS p JOIN main.product_brands AS pb ON pb.product_id = p.id
-          WHERE p.id > ? AND p.id <= ?
-          UNION
-          SELECT r.seed, linked.brand_id, r.name, r.size FROM reachable AS r
-          CROSS JOIN main.products AS p INDEXED BY products_name_size
-          JOIN main.product_brands AS matched ON matched.product_id = p.id AND matched.brand_id = r.brand_id
-          JOIN main.product_brands AS linked ON linked.product_id = p.id
-          WHERE p.name = r.name AND p.size IS r.size
-        ), members AS (
-          SELECT DISTINCT r.seed, r.name, r.size, p.id
-          FROM reachable AS r
-          CROSS JOIN main.products AS p INDEXED BY products_name_size
-          JOIN main.product_brands AS pb ON pb.product_id = p.id AND pb.brand_id = r.brand_id
-          WHERE p.name = r.name AND p.size IS r.size
-        ), targets AS (
-          SELECT seed, name, size, MIN(id) AS target_id FROM members GROUP BY seed, name, size
-        )
-        INSERT INTO temp.catalog_import_merges (product_id, target_id)
-        SELECT members.id, MIN(targets.target_id) FROM members
-        JOIN targets ON targets.seed = members.seed AND targets.name = members.name AND targets.size IS members.size
-        GROUP BY members.id HAVING members.id <> MIN(targets.target_id);`,
-        values: [baseId + afterId, baseId + lastId],
-      },
-      {
-        // Preserve local ownership if any merged product was independent of catalogs
-        statement: `UPDATE main.products SET catalog_id = NULL WHERE id IN (
-          SELECT merges.target_id FROM temp.catalog_import_merges AS merges
-          JOIN main.products AS p ON p.id = merges.product_id WHERE p.catalog_id IS NULL
-        );`,
-        values: [],
-      },
-      {
-        statement: `UPDATE main.codes SET product_id = (
-          SELECT target_id FROM temp.catalog_import_merges WHERE product_id = codes.product_id
-        ) WHERE product_id IN (SELECT product_id FROM temp.catalog_import_merges);`,
-        values: [],
-      },
-      {
-        statement: `UPDATE main.items SET product_id = (
-          SELECT target_id FROM temp.catalog_import_merges WHERE product_id = items.product_id
-        ) WHERE product_id IN (SELECT product_id FROM temp.catalog_import_merges);`,
-        values: [],
-      },
-      {
-        statement: `INSERT INTO main.product_brands (product_id, brand_id)
-          SELECT merges.target_id, pb.brand_id FROM temp.catalog_import_merges AS merges
-          JOIN main.product_brands AS pb ON pb.product_id = merges.product_id WHERE 1
-          ON CONFLICT(product_id, brand_id) DO NOTHING;`,
-        values: [],
-      },
-      {
-        statement: 'DELETE FROM main.products WHERE id IN (SELECT product_id FROM temp.catalog_import_merges);',
-        values: [],
-      },
-      { statement: 'DELETE FROM temp.catalog_import_merges;', values: [] },
     ], false)
   }
 

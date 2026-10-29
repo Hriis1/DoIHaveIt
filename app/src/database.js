@@ -126,5 +126,30 @@ async function openDatabase() {
     );
   `)
 
+  // Build the search index once for existing products, atomically with its triggers
+  const { values: searchIndexes } = await database.query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'products_search';")
+  if (!searchIndexes.length) {
+    await database.execute(`
+      CREATE VIRTUAL TABLE products_search USING fts5(
+        brand, name, size, content='products', content_rowid='id', prefix='2 3'
+      );
+
+      CREATE TRIGGER products_search_insert AFTER INSERT ON products BEGIN
+        INSERT INTO products_search(rowid, brand, name, size) VALUES (new.id, new.brand, new.name, new.size);
+      END;
+      CREATE TRIGGER products_search_delete AFTER DELETE ON products BEGIN
+        INSERT INTO products_search(products_search, rowid, brand, name, size)
+          VALUES ('delete', old.id, old.brand, old.name, old.size);
+      END;
+      -- Keep the update body on one statement line for the native plugin SQL splitter
+      CREATE TRIGGER products_search_update AFTER UPDATE OF id, brand, name, size ON products BEGIN
+        INSERT INTO products_search(products_search, rowid, brand, name, size)
+          VALUES ('delete', old.id, old.brand, old.name, old.size); INSERT INTO products_search(rowid, brand, name, size) VALUES (new.id, new.brand, new.name, new.size);
+      END;
+
+      INSERT INTO products_search(products_search) VALUES ('rebuild');
+    `)
+  }
+
   return database
 }

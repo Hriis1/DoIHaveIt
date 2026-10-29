@@ -101,7 +101,7 @@ export function mountProductsScreen(container, { isNative, databaseReady }) {
       clearTimeout(searchTimer)
       search.placeholder = mode === 'barcode' ? 'Enter the exact barcode' : 'Search brand, name or size'
       search.inputMode = mode === 'barcode' ? 'numeric' : 'search'
-      help.textContent = mode === 'barcode' ? 'Matches a complete barcode exactly, including leading zeros.' : 'Each word can match the brand, name or size.'
+      help.textContent = mode === 'barcode' ? 'Matches a complete barcode exactly, including leading zeros.' : 'Match words or word beginnings in the brand, name or size, in any order.'
       if (isNative) void loadProducts()
     })
   }

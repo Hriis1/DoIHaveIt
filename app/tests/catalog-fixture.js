@@ -38,7 +38,7 @@ export function fixture(t) {
   const database = new DatabaseSync(':memory:')
   database.exec('PRAGMA foreign_keys = ON;')
   const source = readFileSync(new URL('../src/database.js', import.meta.url), 'utf8')
-  database.exec(source.match(/await database\.execute\(`([\s\S]*?)`\)/)[1])
+  for (const [, sql] of source.matchAll(/await database\.execute\(`([\s\S]*?)`\)/g)) database.exec(sql)
   t.after(() => database.close())
   const folder = temporaryDirectory(t)
   const adapter = {

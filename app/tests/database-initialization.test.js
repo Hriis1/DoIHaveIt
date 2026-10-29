@@ -1,12 +1,28 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 import { after, mock, test } from 'node:test'
 
 const database = new DatabaseSync(':memory:')
+// Simulate a released database with products that predate the search index
+const schema = readFileSync(new URL('../src/database.js', import.meta.url), 'utf8').match(/await database\.execute\(`([\s\S]*?)`\)/)[1]
+database.exec(schema)
+database.exec("INSERT INTO products (brand, name, size) VALUES ('Legacy', 'Original Product', '500 ml');")
 after(() => database.close())
+let searchBuilds = 0
 const connection = {
   open: async () => {},
-  execute: async sql => database.exec(sql),
+  execute: async (sql, transaction = true) => {
+    if (transaction) database.exec('BEGIN;')
+    try {
+      database.exec(sql)
+      if (sql.includes('CREATE VIRTUAL TABLE')) searchBuilds++
+      if (transaction) database.exec('COMMIT;')
+    } catch (error) {
+      if (transaction) database.exec('ROLLBACK;')
+      throw error
+    }
+  },
   query: async (sql, values = []) => ({ values: database.prepare(sql).all(...values) }),
   beginTransaction: async () => database.exec('BEGIN;'),
   commitTransaction: async () => database.exec('COMMIT;'),
@@ -37,6 +53,10 @@ test('initialization shares its promise and creates catalog columns and indexes'
   }
   assert.equal(database.prepare('PRAGMA foreign_keys').get().foreign_keys, 1)
   assert.deepEqual(database.prepare('PRAGMA foreign_key_check').all(), [])
+  assert.equal(database.prepare("SELECT rowid FROM products_search WHERE products_search MATCH 'orig*'").get().rowid, 1)
+  assert.equal(database.prepare('SELECT brand FROM products WHERE id = 1').get().brand, 'Legacy')
+  assert.equal(searchBuilds, 1)
+  database.exec('DELETE FROM products;')
 })
 
 test('product identities are unique for both null and known sizes', async () => {
@@ -109,5 +129,6 @@ test('a detach failure releases the source connection without reporting a commit
     assert.deepEqual(calls.at(-1), ['closed'])
     await withDatabaseAccess(async () => {})
     assert.equal(connections, 2, 'The next operation must reopen the connection')
+    assert.equal(searchBuilds, 1, 'Reopening must not rebuild the search index')
   } finally { warning.mock.restore() }
 })

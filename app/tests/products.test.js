@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createProductRepository } from '../src/repositories/productRepo.js'
-import { fixture } from './catalog-fixture.js'
+import { fixture, options, product } from './catalog-fixture.js'
 
 function productsFixture(t) {
   const { database, adapter } = fixture(t)
@@ -26,15 +26,15 @@ test('lists all products once with every linked barcode, including products with
   assert.equal(result.products[1].size, null)
 })
 
-test('text words match independently across fields, regardless of order or ASCII case', async t => {
+test('text word prefixes match across fields, regardless of order or case', async t => {
   const { repository, add } = productsFixture(t)
   const id = add('Coca Cola', 'Original Taste', '500 ml', ['0012345678901'])
   add('Other', 'Original Taste', '250 ml')
-  for (const search of ['coca cola', 'original taste 500', 'TASTE COCA', '  500   cola  ', 'rig 500']) {
+  for (const search of ['coca cola', 'original taste 500', 'TASTE COCA', '  500   cola  ', 'coc col', 'orig 500', 'c t 5']) {
     const result = await repository.getProducts({ search })
     assert.deepEqual(result.products.map(product => product.id), [id])
   }
-  for (const search of ['cola 250', '0012345678901']) {
+  for (const search of ['cola 250', '0012345678901', 'rig 500', 'oca']) {
     assert.equal((await repository.getProducts({ search })).total, 0)
   }
 })
@@ -53,12 +53,15 @@ test('barcode mode requires the complete original code and returns all linked co
   assert.equal((await repository.getProducts({ mode: 'barcode', search: '' })).total, 1)
 })
 
-test('search treats wildcard and SQL punctuation literally', async t => {
+test('search quotes FTS operators and handles punctuation without SQL or FTS injection', async t => {
   const { repository, add } = productsFixture(t)
   add('Brand', "50%_O'Brien", null, ["' OR 1=1 --"])
   add('Other', 'Plain')
-  for (const search of ['%', '_', "O'Brien"]) {
+  for (const search of ['50', "O'Brien"]) {
     assert.equal((await repository.getProducts({ search })).total, 1)
+  }
+  for (const search of ['%', '_', '"', '*', 'OR', 'NOT', 'NEAR', 'brand OR plain', 'name:plain', '(plain) -brand']) {
+    assert.equal((await repository.getProducts({ search })).total, 0)
   }
   assert.equal((await repository.getProducts({ mode: 'barcode', search: "' OR 1=1 --" })).total, 1)
   assert.equal((await repository.getProducts({ search: "' OR 1=1 --" })).total, 0)
@@ -94,4 +97,49 @@ test('sorts by brand, name and size and paginates products in groups of twelve',
 test('an empty result has one empty page', async t => {
   const { repository } = productsFixture(t)
   assert.deepEqual(await repository.getProducts({ page: 2 }), { products: [], total: 0, page: 1, totalPages: 1 })
+})
+
+test('search index follows product edits, deletes and transaction rollbacks', async t => {
+  const { repository, add, database } = productsFixture(t)
+  const id = add('Oldbrand', 'Oldname', null)
+  database.prepare('UPDATE products SET brand = ?, name = ?, size = ? WHERE id = ?').run('Newbrand', 'Newname', '750 ml', id)
+  assert.equal((await repository.getProducts({ search: 'old' })).total, 0)
+  assert.equal((await repository.getProducts({ search: 'newb newn 750' })).total, 1)
+
+  database.exec('BEGIN;')
+  database.prepare('UPDATE products SET size = ? WHERE id = ?').run('900 ml', id)
+  add('Temporary', 'Uncommitted')
+  database.exec('ROLLBACK;')
+  assert.equal((await repository.getProducts({ search: '750' })).total, 1)
+  assert.equal((await repository.getProducts({ search: '900' })).total, 0)
+  assert.equal((await repository.getProducts({ search: 'temporary' })).total, 0)
+
+  database.prepare('DELETE FROM products WHERE id = ?').run(id)
+  assert.equal((await repository.getProducts({ search: 'new' })).total, 0)
+  database.exec("INSERT INTO products_search(products_search, rank) VALUES ('integrity-check', 1);")
+})
+
+test('search supports Unicode word prefixes and uses the FTS virtual index', async t => {
+  const { repository, add, database } = productsFixture(t)
+  add('Марка', 'Мляко', '500 мл')
+  assert.equal((await repository.getProducts({ search: 'мля МАР 5' })).total, 1)
+  const plan = database.prepare(`EXPLAIN QUERY PLAN SELECT p.id FROM products AS p
+    WHERE p.id IN (SELECT rowid FROM products_search WHERE products_search MATCH ?);`).all('"мля"*')
+  assert.ok(plan.some(row => /VIRTUAL TABLE INDEX.*M/.test(row.detail)))
+  assert.ok(!plan.some(row => /SCAN p\b/.test(row.detail)))
+})
+
+test('catalog imports, size upgrades and removals keep the search index synchronized', async t => {
+  const { database, adapter, repository: catalogs, source } = fixture(t)
+  const repository = createProductRepository(operation => operation(adapter))
+  await catalogs.importCatalog('First', source([product('001', 'Original'), product('003', 'Disposable')]), options())
+  assert.equal((await repository.getProducts({ search: 'orig' })).total, 1)
+  await catalogs.importCatalog('Second', source([{ ...product('002', 'Original'), size: '500 ml' }]), options())
+  assert.equal((await repository.getProducts({ search: 'orig 500' })).total, 1)
+  await catalogs.removeCatalog('First', options())
+  assert.equal((await repository.getProducts({ search: 'disp' })).total, 0)
+  assert.equal((await repository.getProducts({ search: 'orig 500' })).total, 1)
+  await catalogs.removeCatalog('Second', options())
+  assert.equal((await repository.getProducts({ search: 'orig' })).total, 1, 'Shared products detached by catalog removal remain searchable')
+  database.exec("INSERT INTO products_search(products_search, rank) VALUES ('integrity-check', 1);")
 })

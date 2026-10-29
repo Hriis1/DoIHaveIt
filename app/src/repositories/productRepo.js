@@ -6,10 +6,12 @@ export function createProductRepository(access = withDatabaseAccess) {
     getProducts: ({ search = '', mode = 'text', page = 1, pageSize = 12 } = {}) => access(async database => {
       const query = search.trim()
       const terms = query ? query.split(/\s+/) : []
-      const parameters = mode === 'barcode' ? (query ? [query] : []) : terms
+      // Quote user text so FTS operators stay literal, and match each word prefix
+      const expression = terms.map(term => `"${term.replace(/"/g, '""')}"*`).join(' AND ')
+      const parameters = query ? [mode === 'barcode' ? query : expression] : []
       const conditions = mode === 'barcode'
         ? (query ? ['p.id = (SELECT product_id FROM codes WHERE code = ?)'] : [])
-        : terms.map(() => "instr(lower(p.brand || ' ' || p.name || ' ' || COALESCE(p.size, '')), lower(?)) > 0")
+        : (query ? ['p.id IN (SELECT rowid FROM products_search WHERE products_search MATCH ?)'] : [])
       const filter = `FROM products AS p${conditions.length ? ` WHERE ${conditions.join(' AND ')}` : ''}`
 
       // Count matching products independently of how many barcodes they have

@@ -260,6 +260,14 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--background);
+  overflow: hidden;
+}
+
+.collection-screen .scan-photo-preview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .collection-screen .scan-photo-actions {

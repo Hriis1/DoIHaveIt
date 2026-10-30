@@ -2,9 +2,10 @@ import './collection.css'
 import html from './collection.html?raw'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
-import { getCollectionItems } from '../../repositories/itemRepo.js'
+import { getCollectionItems, addCollectionItem } from '../../repositories/itemRepo.js'
 import { getProductByBarcode, isProductInCollection } from '../../repositories/productRepo.js'
 import { createScanner } from '../../modules/scan/scan.js'
+import { selectItemPhoto, deleteTemporaryPhoto, saveItemPhoto } from '../../modules/itemPhotos.js'
 
 const pageSize = 12
 
@@ -34,6 +35,12 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const scanProductSize = screen.querySelector('.scan-product-size')
   const scanProductSizeRow = screen.querySelector('.scan-product-size-row')
   const scanResultAdd = screen.querySelector('.scan-result-add')
+  const scanResultClose = screen.querySelector('.scan-result-close')
+  const photoPreview = screen.querySelector('.scan-photo-preview')
+  const photoCamera = screen.querySelector('.scan-photo-camera')
+  const photoGallery = screen.querySelector('.scan-photo-gallery')
+  const photoError = screen.querySelector('.scan-photo-error')
+  let draft
   let active = true
   let request = 0
   let scanRequest = 0
@@ -54,10 +61,115 @@ export function mountCollectionScreen(container, { collection, isNative, databas
 
   title.textContent = collection.name
   listen(screen.querySelector('.collection-back'), 'click', () => navigate('collections'))
-  listen(screen.querySelector('.scan-result-close'), 'click', () => scanResultDialog.close())
+  listen(scanResultClose, 'click', closeScanResult)
+  listen(scanResultDialog, 'cancel', event => {
+    event.preventDefault()
+    closeScanResult()
+  })
+  listen(scanResultDialog, 'close', () => {
+    if (!scanResultDialog.open) discardDraft()
+  })
+  listen(photoCamera, 'click', () => void choosePhoto('camera'))
+  listen(photoGallery, 'click', () => void choosePhoto('gallery'))
+  listen(scanResultAdd, 'click', () => void addScannedProduct())
+
+  function discardDraft() {
+    if (!draft) return
+    draft.closed = true
+    // A pending save owns its files until its database operation finishes
+    if (!draft.saving) void deleteTemporaryPhoto(draft.photo)
+    draft = undefined
+    scanRequest++
+  }
+
+  function closeScanResult() {
+    if (draft?.saving) return
+    discardDraft()
+    scanResultDialog.close()
+  }
+
+  function updatePhotoControls(session) {
+    if (!active || draft !== session) return
+    photoCamera.disabled = photoGallery.disabled = session.selecting || session.saving
+    scanResultAdd.disabled = scanResultClose.disabled = session.saving
+    scanResultAdd.textContent = session.saving ? 'Adding…' : 'Add to collection'
+  }
+
+  function showPhotoError(message) {
+    photoError.textContent = message
+    photoError.hidden = !message
+  }
+
+  async function choosePhoto(source) {
+    const session = draft
+    if (!session?.product || session.selecting || session.saving) return
+    session.selecting = true
+    updatePhotoControls(session)
+    showPhotoError('')
+    try {
+      const photo = await selectItemPhoto(source)
+      if (!photo) return
+      if (!active || session.closed || draft !== session) {
+        await deleteTemporaryPhoto(photo)
+        return
+      }
+      const previousPhoto = session.photo
+      session.photo = photo
+      const image = document.createElement('img')
+      image.alt = ''
+      image.src = photo.webPath
+      photoPreview.replaceChildren(image)
+      photoPreview.setAttribute('aria-label', 'Selected product photo')
+      showPhotoError('')
+      await deleteTemporaryPhoto(previousPhoto)
+    } catch (error) {
+      if (active && draft === session && !session.closed) showPhotoError(error.message)
+    } finally {
+      session.selecting = false
+      updatePhotoControls(session)
+    }
+  }
+
+  async function addScannedProduct() {
+    const session = draft
+    if (!session?.product || session.saving) return
+    if (!session.photo || session.selecting) {
+      showPhotoError('Photo required')
+      return
+    }
+    session.saving = true
+    updatePhotoControls(session)
+    showPhotoError('')
+    try {
+      await saveItemPhoto(session.photo, path => addCollectionItem(collection.id, session.product.id, path))
+      session.photo = undefined
+      if (!active || draft !== session) return
+      session.saving = false
+      closeScanResult()
+      search.value = ''
+      page = 1
+      collectionTotal = undefined
+      await loadItems()
+    } catch (error) {
+      console.error('Could not add scanned product:', error)
+      if (active && draft === session) showPhotoError(error.message || 'Could not add the product. Please try again.')
+    } finally {
+      session.saving = false
+      if (session.closed) await deleteTemporaryPhoto(session.photo)
+      updatePhotoControls(session)
+    }
+  }
 
   async function showScanResult(barcode) {
+    if (draft?.saving) return
+    discardDraft()
+    const session = { product: null, photo: null, selecting: false, saving: false, closed: false }
+    draft = session
     const currentScan = ++scanRequest
+    photoPreview.replaceChildren()
+    photoPreview.setAttribute('aria-label', 'No photo selected')
+    showPhotoError('')
+    updatePhotoControls(session)
     scanResultProduct.hidden = true
     scanResultAdd.hidden = true
     scanResultTitle.textContent = 'Looking up product…'
@@ -74,6 +186,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
         ? `${product.name} alreafy in collectio`
         : product ? 'Product found in catalog' : 'Unrecognized product'
       if (product && !inCollection) {
+        session.product = product
         scanProductBrand.textContent = product.brand
         scanProductName.textContent = product.name
         scanProductSize.textContent = product.size ?? ''
@@ -186,6 +299,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
 
   return () => {
     active = false
+    discardDraft()
     events.abort()
     void scanner.destroy()
     scanResultDialog.close()

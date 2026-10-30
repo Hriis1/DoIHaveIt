@@ -1,5 +1,18 @@
 import { withDatabaseAccess } from '../database.js'
 
+export async function addCollectionItem(collectionId, productId, image) {
+  if (!image) throw new Error('Photo required')
+  return withDatabaseAccess(async database => {
+    const { changes } = await database.run(`
+      INSERT INTO items (collection_id, product_id, image)
+      SELECT ?, ?, ? WHERE NOT EXISTS (
+        SELECT 1 FROM items WHERE collection_id = ? AND product_id = ?
+      );
+    `, [collectionId, productId, image, collectionId, productId])
+    if (!changes.changes) throw new Error('This product is already in this collection.')
+  })
+}
+
 export async function getCollectionItems(collectionId, { search, page, pageSize }) {
   return withDatabaseAccess(async database => {
     const filter = `

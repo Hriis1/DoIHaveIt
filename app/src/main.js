@@ -6,6 +6,8 @@ import { mountCollectionScreen } from './screens/collection/collection.js'
 import { mountCatalogsScreen } from './screens/catalogs/catalogs.js'
 import { mountProductsScreen } from './screens/products/products.js'
 import { prepareCatalogCache } from './modules/catalog/archive.js'
+import { App } from '@capacitor/app'
+import { preparePhotoCache, discardCameraResult } from './modules/itemPhotos.js'
 
 const app = document.querySelector('#app')
 const container = document.querySelector('#screen-content')
@@ -13,6 +15,15 @@ const appMenu = document.querySelector('.app-menu')
 const isNative = Capacitor.isNativePlatform()
 const databaseReady = isNative ? initializeDatabase() : Promise.resolve()
 if (isNative) prepareCatalogCache().catch(error => console.warn('Catalog cache cleanup failed:', error))
+if (isNative) {
+  preparePhotoCache().catch(error => console.warn('Photo cache cleanup failed:', error))
+  // A restored app has no open draft; discard results from the interrupted picker
+  void App.addListener('appRestoredResult', result => {
+    if (result.pluginId === 'Camera' && ['takePhoto', 'chooseFromGallery'].includes(result.methodName)) {
+      void discardCameraResult(result.data).catch(error => console.warn('Restored photo cleanup failed:', error))
+    }
+  }).catch(error => console.warn('Could not register camera recovery:', error))
+}
 const screens = { collections: mountCollectionsScreen, collection: mountCollectionScreen, catalogs: mountCatalogsScreen, products: mountProductsScreen }
 let unmountScreen
 

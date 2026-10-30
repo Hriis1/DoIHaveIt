@@ -45,12 +45,13 @@
             <dd class="scan-photo-controls">
               <span class="scan-photo-preview" role="img" aria-label="No photo selected"></span>
               <div class="scan-photo-actions">
-                <button class="secondary-button" type="button" aria-label="Take a photo"><svg aria-hidden="true"><use href="#icon-camera" /></svg></button>
-                <button class="secondary-button" type="button" aria-label="Choose from gallery"><svg aria-hidden="true"><use href="#icon-image" /></svg></button>
+                <button class="secondary-button scan-photo-camera" type="button" aria-label="Take a photo" aria-describedby="scan-photo-error"><svg aria-hidden="true"><use href="#icon-camera" /></svg></button>
+                <button class="secondary-button scan-photo-gallery" type="button" aria-label="Choose from gallery" aria-describedby="scan-photo-error"><svg aria-hidden="true"><use href="#icon-image" /></svg></button>
               </div>
             </dd>
           </div>
         </dl>
+        <p class="error scan-photo-error" id="scan-photo-error" role="alert" hidden></p>
       </div>
       <button class="primary-button scan-result-add" type="button" hidden>Add to collection</button>
     </div>

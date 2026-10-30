@@ -28,6 +28,12 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const scanResultDialog = screen.querySelector('.scan-result-dialog')
   const scanResultTitle = screen.querySelector('#scan-result-title')
   const scanResultBarcode = screen.querySelector('#scan-result-barcode')
+  const scanResultProduct = screen.querySelector('.scan-result-product')
+  const scanProductBrand = screen.querySelector('.scan-product-brand')
+  const scanProductName = screen.querySelector('.scan-product-name')
+  const scanProductSize = screen.querySelector('.scan-product-size')
+  const scanProductSizeRow = screen.querySelector('.scan-product-size-row')
+  const scanResultAdd = screen.querySelector('.scan-result-add')
   let active = true
   let request = 0
   let scanRequest = 0
@@ -52,6 +58,8 @@ export function mountCollectionScreen(container, { collection, isNative, databas
 
   async function showScanResult(barcode) {
     const currentScan = ++scanRequest
+    scanResultProduct.hidden = true
+    scanResultAdd.hidden = true
     scanResultTitle.textContent = 'Looking up product…'
     scanResultBarcode.textContent = `Barcode: ${barcode}`
     scanResultDialog.showModal()
@@ -65,6 +73,14 @@ export function mountCollectionScreen(container, { collection, isNative, databas
       scanResultTitle.textContent = inCollection
         ? `${product.name} alreafy in collectio`
         : product ? 'Product found in catalog' : 'Unrecognized product'
+      if (product && !inCollection) {
+        scanProductBrand.textContent = product.brand
+        scanProductName.textContent = product.name
+        scanProductSize.textContent = product.size ?? ''
+        scanProductSizeRow.hidden = product.size === null
+        scanResultProduct.hidden = false
+        scanResultAdd.hidden = false
+      }
     } catch (lookupError) {
       if (!active || currentScan !== scanRequest) return
       console.error('Could not look up scanned product:', lookupError)

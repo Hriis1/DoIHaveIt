@@ -34,7 +34,21 @@
     <div class="sheet">
       <h2 id="scan-result-title" role="status" aria-live="polite">Looking up product…</h2>
       <p id="scan-result-barcode"></p>
-      <div class="sheet-actions"><button class="primary-button scan-result-close" type="button">Close</button></div>
+      <div class="scan-result-product" hidden>
+        <dl class="scan-product-details">
+          <div><dt>Brand</dt><dd class="scan-product-brand"></dd></div>
+          <div><dt>Name</dt><dd class="scan-product-name"></dd></div>
+          <div class="scan-product-size-row"><dt>Size</dt><dd class="scan-product-size"></dd></div>
+        </dl>
+        <div class="sheet-actions">
+          <button class="secondary-button" type="button">Take a photo</button>
+          <button class="secondary-button" type="button">Choose from gallery</button>
+        </div>
+      </div>
+      <div class="sheet-actions">
+        <button class="secondary-button scan-result-close" type="button">Close</button>
+        <button class="primary-button scan-result-add" type="button" hidden>Add to collection</button>
+      </div>
     </div>
   </dialog>
 

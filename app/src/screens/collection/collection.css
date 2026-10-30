@@ -192,6 +192,28 @@
   overflow-wrap: anywhere;
 }
 
+.collection-screen .scan-product-details {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 0;
+}
+
+.collection-screen .scan-product-details > div {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  font-size: 14px;
+}
+
+.collection-screen .scan-product-details dt {
+  color: var(--muted);
+}
+
+.collection-screen .scan-product-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .collection-screen .gallery-empty {
   text-align: center;
   padding: 40px 8px;

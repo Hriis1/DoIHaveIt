@@ -51,7 +51,6 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const scanner = createScanner({
     onScan: value => {
       if (!active) return
-      search.value = value
       void showScanResult(value)
     },
     onError: message => {
@@ -188,7 +187,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
       const inCollection = product ? await isProductInCollection(product.id, collection.id) : false
       if (!active || currentScan !== scanRequest) return
       scanResultTitle.textContent = inCollection
-        ? `${product.name} alreafy in collection`
+        ? `${product.name} already in collection`
         : product ? 'Product found in catalog' : 'Unrecognized product'
       scanResultDismiss.hidden = !inCollection
       scanResultAiSearch.hidden = Boolean(product)

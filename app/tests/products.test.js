@@ -14,6 +14,39 @@ function productsFixture(t) {
   return { database, repository, add }
 }
 
+test('looks up barcodes through the injected database and returns product details', async t => {
+  const { repository, add } = productsFixture(t)
+  const id = add('Brand', 'Product', '500 ml', ['036000291452'])
+  const expected = { id, brand: 'Brand', name: 'Product', size: '500 ml', code: '036000291452' }
+
+  assert.deepEqual({ ...await repository.getProductByBarcode('036000291452') }, expected)
+  assert.deepEqual({ ...await repository.getProductByBarcode('0036000291452') }, expected)
+  const eanId = add('Brand', 'EAN product', null, ['0012345678905'])
+  assert.equal((await repository.getProductByBarcode('012345678905')).id, eanId)
+  const exactId = add('Brand', 'Exact product', null, ['0036000291452'])
+  assert.equal((await repository.getProductByBarcode('0036000291452')).id, exactId)
+  assert.equal(await repository.getProductByBarcode('unknown'), null)
+  add('Brand', 'Invalid checksum', null, ['0036000291453'])
+  assert.equal(await repository.getProductByBarcode('036000291453'), null)
+})
+
+test('checks product membership in the requested collection', async t => {
+  const { repository, add, database } = productsFixture(t)
+  const id = add('Brand', 'Owned product')
+  const otherId = add('Brand', 'Other product')
+  database.exec(`
+    INSERT INTO collections (id, name) VALUES (1, 'First'), (2, 'Second');
+    INSERT INTO items (collection_id, product_id) VALUES (1, ${id}), (1, ${id}), (2, ${otherId});
+  `)
+
+  assert.equal(await repository.isProductInCollection(id, 1), true)
+  assert.equal(await repository.isProductInCollection(id, 2), false)
+  assert.equal(await repository.isProductInCollection(otherId, 1), false)
+  assert.equal(await repository.isProductInCollection(otherId, 2), true)
+  assert.equal(await repository.isProductInCollection(id, 999), false)
+  assert.equal(await repository.isProductInCollection(999, 1), false)
+})
+
 test('lists all products once with every linked barcode, including products without codes', async t => {
   const { repository, add, database } = productsFixture(t)
   const id = add('Coca Cola', 'Original Taste', '500 ml', ['0012345678901', '123456789012'])

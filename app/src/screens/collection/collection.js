@@ -3,7 +3,7 @@ import html from './collection.html?raw'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getCollectionItems } from '../../repositories/itemRepo.js'
-import { getProductByBarcode } from '../../repositories/productRepo.js'
+import { getProductByBarcode, isProductInCollection } from '../../repositories/productRepo.js'
 import { createScanner } from '../../modules/scan/scan.js'
 
 const pageSize = 12
@@ -60,7 +60,11 @@ export function mountCollectionScreen(container, { collection, isNative, databas
       if (!active || currentScan !== scanRequest) return
       const product = await getProductByBarcode(barcode)
       if (!active || currentScan !== scanRequest) return
-      scanResultTitle.textContent = product ? 'Product found' : 'Product not found'
+      const inCollection = product ? await isProductInCollection(product.id, collection.id) : false
+      if (!active || currentScan !== scanRequest) return
+      scanResultTitle.textContent = inCollection
+        ? `${product.name} alreafy in collectio`
+        : product ? 'Product found in catalog' : 'Unrecognized product'
     } catch (lookupError) {
       if (!active || currentScan !== scanRequest) return
       console.error('Could not look up scanned product:', lookupError)

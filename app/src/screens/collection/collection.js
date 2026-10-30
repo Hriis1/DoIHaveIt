@@ -35,6 +35,8 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const scanProductSize = screen.querySelector('.scan-product-size')
   const scanProductSizeRow = screen.querySelector('.scan-product-size-row')
   const scanResultAdd = screen.querySelector('.scan-result-add')
+  const scanResultDismiss = screen.querySelector('.scan-result-dismiss')
+  const scanResultAiSearch = screen.querySelector('.scan-result-ai-search')
   const scanResultClose = screen.querySelector('.scan-result-close')
   const photoPreview = screen.querySelector('.scan-photo-preview')
   const photoCamera = screen.querySelector('.scan-photo-camera')
@@ -62,6 +64,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   title.textContent = collection.name
   listen(screen.querySelector('.collection-back'), 'click', () => navigate('collections'))
   listen(scanResultClose, 'click', closeScanResult)
+  listen(scanResultDismiss, 'click', closeScanResult)
   listen(scanResultDialog, 'cancel', event => {
     event.preventDefault()
     closeScanResult()
@@ -172,6 +175,8 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     updatePhotoControls(session)
     scanResultProduct.hidden = true
     scanResultAdd.hidden = true
+    scanResultDismiss.hidden = true
+    scanResultAiSearch.hidden = true
     scanResultTitle.textContent = 'Looking up product…'
     scanResultBarcode.textContent = `Barcode: ${barcode}`
     scanResultDialog.showModal()
@@ -183,8 +188,10 @@ export function mountCollectionScreen(container, { collection, isNative, databas
       const inCollection = product ? await isProductInCollection(product.id, collection.id) : false
       if (!active || currentScan !== scanRequest) return
       scanResultTitle.textContent = inCollection
-        ? `${product.name} alreafy in collectio`
+        ? `${product.name} alreafy in collection`
         : product ? 'Product found in catalog' : 'Unrecognized product'
+      scanResultDismiss.hidden = !inCollection
+      scanResultAiSearch.hidden = Boolean(product)
       if (product && !inCollection) {
         session.product = product
         scanProductBrand.textContent = product.brand

@@ -14,7 +14,7 @@ const deferred = () => {
   return { promise, resolve, reject }
 }
 
-function popup() {
+function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null }, inCollection = false } = {}) {
   const nodes = new Map()
   const node = selector => {
     if (!nodes.has(selector)) {
@@ -41,8 +41,8 @@ function popup() {
   const context = {
     html: '', AbortController, console: { error() {} },
     document: { createElement: () => ({}) },
-    getProductByBarcode: async () => ({ id: 7, name: 'Product', brand: 'Brand', size: null }),
-    isProductInCollection: async () => false,
+    getProductByBarcode: async () => product,
+    isProductInCollection: async () => inCollection,
     createScanner: options => { scan = options.onScan; return { destroy() {} } },
     getCollectionItems: async () => ({ items: [], total: inserted.length, page: 1, totalPages: 1 }),
     addCollectionItem: async (...args) => { inserted.push(args) },
@@ -59,8 +59,35 @@ function popup() {
     scan: async () => { scan('123'); await settle() },
     select: callback => { select = callback },
     save: callback => { save = callback },
+    result: (value, owned = false) => { product = value; inCollection = owned },
   }
 }
+
+test('scan results show only their matching bottom action and reset it on the next scan', async () => {
+  const ui = popup({ inCollection: true })
+  await ui.scan()
+  assert.equal(ui.node('.scan-result-dismiss').hidden, false)
+  assert.equal(ui.node('.scan-result-ai-search').hidden, true)
+  assert.equal(ui.node('.scan-result-add').hidden, true)
+  ui.node('.scan-result-dismiss').emit()
+  assert.equal(ui.node('.scan-result-dialog').open, false)
+
+  ui.result(null)
+  await ui.scan()
+  assert.equal(ui.node('.scan-result-dismiss').hidden, true)
+  assert.equal(ui.node('.scan-result-ai-search').hidden, false)
+  assert.equal(ui.node('.scan-result-add').hidden, true)
+  ui.node('.scan-result-ai-search').emit()
+  assert.equal(ui.node('.scan-result-dialog').open, true)
+  assert.equal(ui.inserted.length, 0)
+
+  ui.result({ id: 7, name: 'Product', brand: 'Brand', size: null })
+  await ui.scan()
+  assert.equal(ui.node('.scan-result-dismiss').hidden, true)
+  assert.equal(ui.node('.scan-result-ai-search').hidden, true)
+  assert.equal(ui.node('.scan-result-add').hidden, false)
+  ui.unmount()
+})
 
 test('Add shows Photo required until a selected photo is ready', async () => {
   const ui = popup()

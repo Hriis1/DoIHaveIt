@@ -207,7 +207,9 @@
   overflow-wrap: anywhere;
 }
 
-.collection-screen .scan-result-add {
+.collection-screen .scan-result-add,
+.collection-screen .scan-result-dismiss,
+.collection-screen .scan-result-ai-search {
   display: block;
   width: 100%;
   margin-top: 20px;

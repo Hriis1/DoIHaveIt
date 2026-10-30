@@ -40,11 +40,17 @@
           <div><dt>Brand</dt><dd class="scan-product-brand"></dd></div>
           <div><dt>Name</dt><dd class="scan-product-name"></dd></div>
           <div class="scan-product-size-row"><dt>Size</dt><dd class="scan-product-size"></dd></div>
+          <div class="scan-product-photo-row">
+            <dt>Photo</dt>
+            <dd class="scan-photo-controls">
+              <span class="scan-photo-preview" role="img" aria-label="No photo selected"></span>
+              <div class="scan-photo-actions">
+                <button class="secondary-button" type="button" aria-label="Take a photo"><svg aria-hidden="true"><use href="#icon-camera" /></svg></button>
+                <button class="secondary-button" type="button" aria-label="Choose from gallery"><svg aria-hidden="true"><use href="#icon-image" /></svg></button>
+              </div>
+            </dd>
+          </div>
         </dl>
-        <div class="sheet-actions">
-          <button class="secondary-button" type="button">Take a photo</button>
-          <button class="secondary-button" type="button">Choose from gallery</button>
-        </div>
       </div>
       <button class="primary-button scan-result-add" type="button" hidden>Add to collection</button>
     </div>

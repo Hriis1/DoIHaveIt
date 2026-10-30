@@ -32,6 +32,7 @@
 
   <dialog class="scan-result-dialog" aria-labelledby="scan-result-title" aria-describedby="scan-result-barcode">
     <div class="sheet">
+      <button class="scan-result-close" type="button" aria-label="Close scan result"><svg aria-hidden="true"><use href="#icon-close" /></svg></button>
       <h2 id="scan-result-title" role="status" aria-live="polite">Looking up product…</h2>
       <p id="scan-result-barcode"></p>
       <div class="scan-result-product" hidden>
@@ -45,10 +46,7 @@
           <button class="secondary-button" type="button">Choose from gallery</button>
         </div>
       </div>
-      <div class="sheet-actions">
-        <button class="secondary-button scan-result-close" type="button">Close</button>
-        <button class="primary-button scan-result-add" type="button" hidden>Add to collection</button>
-      </div>
+      <button class="primary-button scan-result-add" type="button" hidden>Add to collection</button>
     </div>
   </dialog>
 

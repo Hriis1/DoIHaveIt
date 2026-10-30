@@ -178,11 +178,44 @@
   inset: 0;
   margin: auto;
   width: min(400px, calc(100% - 40px));
+  height: fit-content;
   border-radius: 20px;
 }
 
+.collection-screen .scan-result-dialog .sheet {
+  position: relative;
+  padding: 20px 18px 22px;
+}
+
+.collection-screen .scan-result-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+}
+
 .collection-screen #scan-result-title {
+  padding-right: 36px;
   overflow-wrap: anywhere;
+}
+
+.collection-screen .scan-result-dialog .sheet-actions {
+  margin-top: 16px;
+}
+
+.collection-screen .scan-result-add {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  border-radius: 12px;
 }
 
 .collection-screen #scan-result-barcode {

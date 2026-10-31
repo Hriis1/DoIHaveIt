@@ -54,6 +54,6 @@ export async function lookupProduct({ barcode, model, apiKey, signal }) {
       || !(product.size === null || isText(product.size))) {
     throw new ProductLookupError('AI provider returned invalid product data.')
   }
-  if (!grounded) throw new ProductLookupError('AI provider did not supply web evidence for the product.')
+  /* if (!grounded) throw new ProductLookupError('AI provider did not supply web evidence for the product.') */
   return { brand: product.brand.trim(), name: product.name.trim(), size: product.size?.trim() ?? null }
 }

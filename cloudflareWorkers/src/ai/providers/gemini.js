@@ -22,9 +22,7 @@ export async function callGemini({ model, apiKey, prompt, schema, signal }) {
     }
     const text = candidate.content.parts.filter(part => !part.thought && typeof part.text === 'string')
       .map(part => part.text).join('')
-    const chunks = candidate.groundingMetadata?.groundingChunks
-    const grounded = Array.isArray(chunks) && chunks.some(chunk => /^https?:\/\//.test(chunk.web?.uri ?? ''))
-    return { text, grounded }
+    return { text }
   } catch (error) {
     if (error instanceof ProductLookupError) throw error
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {

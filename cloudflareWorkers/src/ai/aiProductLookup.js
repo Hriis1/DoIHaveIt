@@ -34,7 +34,7 @@ export async function lookupProduct({ barcode, model, apiKey, signal }) {
     'Return only JSON matching the provided schema.',
     `Barcode: ${JSON.stringify(barcode)}`,
   ].join('\n')
-  const { text, grounded } = await providers[configuration.provider]({
+  const { text } = await providers[configuration.provider]({
     model: configuration.model, apiKey, prompt, schema: responseSchema, signal,
   })
 
@@ -54,6 +54,5 @@ export async function lookupProduct({ barcode, model, apiKey, signal }) {
       || !(product.size === null || isText(product.size))) {
     throw new ProductLookupError('AI provider returned invalid product data.')
   }
-  /* if (!grounded) throw new ProductLookupError('AI provider did not supply web evidence for the product.') */
   return { brand: product.brand.trim(), name: product.name.trim(), size: product.size?.trim() ?? null }
 }

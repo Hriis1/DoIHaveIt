@@ -9,11 +9,10 @@ const request = (body = input, env = { GEMINI_API_KEY: 'app-secret' }, method = 
   method,
   ...(method === 'POST' ? { body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } } : {}),
 }), env)
-const answer = (value = product, grounded = true) => ({
+const answer = (value = product) => ({
   candidates: [{
     finishReason: 'STOP',
     content: { parts: [{ text: JSON.stringify({ product: value }) }] },
-    ...(grounded ? { groundingMetadata: { groundingChunks: [{ web: { uri: 'https://example.com/product' } }] } } : {}),
   }],
 })
 const json = value => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } })
@@ -23,7 +22,7 @@ test('Gemini is enabled for both key sources', () => {
   assert.deepEqual(supportedWithKey, ['gemini'])
 })
 
-test('app-key lookup sends the exact barcode, search tool and shared schema to Gemini once', async t => {
+test('app-key lookup sends the exact barcode, search tool and schema once and accepts a product without source metadata', async t => {
   let calls = 0
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     calls++
@@ -123,20 +122,20 @@ test('OPTIONS allows JSON POSTs and other methods are rejected without provider 
 })
 
 test('a valid no-match result returns 404', async t => {
-  t.mock.method(globalThis, 'fetch', async () => json(answer(null, false)))
+  t.mock.method(globalThis, 'fetch', async () => json(answer(null)))
   const response = await request()
   assert.equal(response.status, 404)
   assert.deepEqual(await response.json(), { error: 'Product not found' })
 })
 
-test('malformed, incomplete or ungrounded results are failures rather than unknown products', async t => {
+test('malformed or incomplete results are failures rather than unknown products', async t => {
   const badText = text => ({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text }] } }] })
   for (const value of [{}, { candidates: [] },
     { candidates: [{ ...answer().candidates[0], finishReason: 'MAX_TOKENS' }] },
     badText('not JSON'), badText('null'), badText('{}'), badText('{"product":null,"extra":true}'),
     answer({ brand: '', name: 'Product', size: null }), answer({ brand: 'Brand', name: ' ', size: null }),
     answer({ brand: 'Brand', name: 'Product' }), answer({ ...product, size: 500 }),
-    answer({ ...product, size: '' }), answer({ ...product, extra: true }), answer(product, false),
+    answer({ ...product, size: '' }), answer({ ...product, extra: true }),
   ]) {
     const provider = t.mock.method(globalThis, 'fetch', async () => json(value))
     try {

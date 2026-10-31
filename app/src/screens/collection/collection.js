@@ -3,9 +3,10 @@ import html from './collection.html?raw'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getCollectionItems, addCollectionItem } from '../../repositories/itemRepo.js'
-import { getProductByBarcode, isProductInCollection } from '../../repositories/productRepo.js'
+import { getProductByBarcode, isProductInCollection, resolveAiProduct } from '../../repositories/productRepo.js'
 import { createScanner } from '../../modules/scan/scan.js'
 import { selectItemPhoto, deleteTemporaryPhoto, saveItemPhoto } from '../../modules/itemPhotos.js'
+import { lookupProductWithAi } from '../../modules/aiProductLookup.js'
 
 const pageSize = 12
 
@@ -29,6 +30,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const scanResultDialog = screen.querySelector('.scan-result-dialog')
   const scanResultTitle = screen.querySelector('#scan-result-title')
   const scanResultBarcode = screen.querySelector('#scan-result-barcode')
+  const scanResultError = screen.querySelector('.scan-result-error')
   const scanResultProduct = screen.querySelector('.scan-result-product')
   const scanProductBrand = screen.querySelector('.scan-product-brand')
   const scanProductName = screen.querySelector('.scan-product-name')
@@ -74,10 +76,12 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   listen(photoCamera, 'click', () => void choosePhoto('camera'))
   listen(photoGallery, 'click', () => void choosePhoto('gallery'))
   listen(scanResultAdd, 'click', () => void addScannedProduct())
+  listen(scanResultAiSearch, 'click', () => void searchWithAi())
 
   function discardDraft() {
     if (!draft) return
     draft.closed = true
+    draft.lookupController.abort()
     // A pending save owns its files until its database operation finishes
     if (!draft.saving) void deleteTemporaryPhoto(draft.photo)
     draft = undefined
@@ -95,6 +99,54 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     photoCamera.disabled = photoGallery.disabled = session.selecting || session.saving
     scanResultAdd.disabled = scanResultClose.disabled = session.saving
     scanResultAdd.textContent = session.saving ? 'Adding…' : 'Add to collection'
+    scanResultAiSearch.disabled = session.searching
+  }
+
+  function isCurrentDraft(session) {
+    return active && draft === session && !session.closed
+  }
+
+  async function renderProductResult(session, product) {
+    const inCollection = product ? await isProductInCollection(product.id, collection.id) : false
+    if (!isCurrentDraft(session)) return
+    scanResultTitle.textContent = inCollection
+      ? `${product.name} already in collection`
+      : product ? 'Product found in catalog' : 'Unrecognized product'
+    scanResultDismiss.hidden = !inCollection
+    scanResultAiSearch.hidden = Boolean(product)
+    scanResultProduct.hidden = scanResultAdd.hidden = !product || inCollection
+    if (product && !inCollection) {
+      session.product = product
+      scanProductBrand.textContent = product.brand
+      scanProductName.textContent = product.name
+      scanProductSize.textContent = product.size ?? ''
+      scanProductSizeRow.hidden = product.size === null
+    }
+  }
+
+  async function searchWithAi() {
+    const session = draft
+    if (!session || session.closed || session.product || session.searching || session.saving) return
+    session.searching = true
+    updatePhotoControls(session)
+    scanResultError.hidden = true
+    scanResultTitle.textContent = 'Searching for product…'
+    try {
+      const product = await lookupProductWithAi(session.barcode, { signal: session.lookupController.signal })
+      await databaseReady
+      if (!isCurrentDraft(session)) return
+      const resolved = await resolveAiProduct(session.barcode, product, { signal: session.lookupController.signal })
+      if (!isCurrentDraft(session)) return
+      await renderProductResult(session, resolved)
+    } catch (error) {
+      if (!isCurrentDraft(session)) return
+      scanResultTitle.textContent = 'Unrecognized product'
+      scanResultError.textContent = error.message || 'Could not search for the product. Please try again.'
+      scanResultError.hidden = false
+    } finally {
+      session.searching = false
+      updatePhotoControls(session)
+    }
   }
 
   function showPhotoError(message) {
@@ -165,12 +217,16 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   async function showScanResult(barcode) {
     if (draft?.saving) return
     discardDraft()
-    const session = { product: null, photo: null, selecting: false, saving: false, closed: false }
+    const session = {
+      barcode, product: null, photo: null, selecting: false, saving: false, searching: false, closed: false,
+      lookupController: new AbortController(),
+    }
     draft = session
     const currentScan = ++scanRequest
     photoPreview.replaceChildren()
     photoPreview.setAttribute('aria-label', 'No photo selected')
     showPhotoError('')
+    scanResultError.hidden = true
     updatePhotoControls(session)
     scanResultProduct.hidden = true
     scanResultAdd.hidden = true
@@ -184,22 +240,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
       if (!active || currentScan !== scanRequest) return
       const product = await getProductByBarcode(barcode)
       if (!active || currentScan !== scanRequest) return
-      const inCollection = product ? await isProductInCollection(product.id, collection.id) : false
-      if (!active || currentScan !== scanRequest) return
-      scanResultTitle.textContent = inCollection
-        ? `${product.name} already in collection`
-        : product ? 'Product found in catalog' : 'Unrecognized product'
-      scanResultDismiss.hidden = !inCollection
-      scanResultAiSearch.hidden = Boolean(product)
-      if (product && !inCollection) {
-        session.product = product
-        scanProductBrand.textContent = product.brand
-        scanProductName.textContent = product.name
-        scanProductSize.textContent = product.size ?? ''
-        scanProductSizeRow.hidden = product.size === null
-        scanResultProduct.hidden = false
-        scanResultAdd.hidden = false
-      }
+      await renderProductResult(session, product)
     } catch (lookupError) {
       if (!active || currentScan !== scanRequest) return
       console.error('Could not look up scanned product:', lookupError)

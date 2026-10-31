@@ -35,14 +35,24 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
   }
   const deleted = []
   const inserted = []
+  const resolved = []
+  const memberships = []
   let scan
+  let lookup = async () => { throw new Error('AI lookup failed') }
+  let resolveProduct = async (barcode, product, { signal }) => {
+    signal.throwIfAborted()
+    resolved.push({ barcode, ...product })
+    return { id: 9, ...product }
+  }
   let select = async () => null
   let save = async (photo, insert) => { await insert('item-photos/saved.jpg'); deleted.push(photo) }
   const context = {
     html: '', AbortController, console: { error() {} },
     document: { createElement: () => ({}) },
     getProductByBarcode: async () => product,
-    isProductInCollection: async () => inCollection,
+    isProductInCollection: async (...args) => { memberships.push(args); return inCollection },
+    lookupProductWithAi: (...args) => lookup(...args),
+    resolveAiProduct: (...args) => resolveProduct(...args),
     createScanner: options => { scan = options.onScan; return { destroy() {} } },
     getCollectionItems: async () => ({ items: [], total: inserted.length, page: 1, totalPages: 1 }),
     addCollectionItem: async (...args) => { inserted.push(args) },
@@ -55,8 +65,10 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
     collection: { id: 3, name: 'Collection' }, isNative: false, databaseReady: Promise.resolve(), navigate() {},
   })
   return {
-    node, deleted, inserted, unmount,
-    scan: async () => { scan('123'); await settle() },
+    node, deleted, inserted, resolved, memberships, unmount,
+    scan: async (barcode = '123') => { scan(barcode); await settle() },
+    ai: callback => { lookup = callback },
+    resolve: callback => { resolveProduct = callback },
     select: callback => { select = callback },
     save: callback => { save = callback },
     result: (value, owned = false) => { product = value; inCollection = owned },
@@ -202,4 +214,129 @@ test('failed saves retain the photo and permit retry, while leaving during a fai
   saving.reject(new Error('Save failed'))
   await settle()
   assert.deepEqual(ui.deleted, [photo])
+})
+
+test('AI lookup prevents duplicate requests and reuses the photo-required add flow for the resolved product', async () => {
+  const ui = popup({ product: null })
+  ui.node('#item-search').value = 'existing search'
+  await ui.scan('004062139018352')
+  const pending = deferred()
+  const product = { brand: 'brand', name: 'product', size: '500 ml' }
+  let calls = 0
+  ui.ai((barcode, { signal }) => {
+    calls++
+    assert.equal(barcode, '004062139018352')
+    assert.equal(signal.aborted, false)
+    return pending.promise
+  })
+  ui.node('.scan-result-ai-search').emit()
+  ui.node('.scan-result-ai-search').emit()
+  assert.equal(calls, 1)
+  assert.equal(ui.node('.scan-result-ai-search').disabled, true)
+  assert.equal(ui.node('#scan-result-title').textContent, 'Searching for product…')
+  pending.resolve(product)
+  await settle()
+  assert.deepEqual(ui.resolved, [{ barcode: '004062139018352', ...product }])
+  assert.deepEqual(ui.memberships, [[9, 3]])
+  assert.equal(ui.node('.scan-result-ai-search').hidden, true)
+  assert.equal(ui.node('.scan-result-add').hidden, false)
+  assert.equal(ui.node('.scan-result-product').hidden, false)
+  assert.equal(ui.node('.scan-product-brand').textContent, 'brand')
+  assert.equal(ui.node('.scan-product-name').textContent, 'product')
+  assert.equal(ui.node('.scan-product-size').textContent, '500 ml')
+  assert.equal(ui.node('#item-search').value, 'existing search')
+  ui.node('.scan-result-add').emit()
+  assert.equal(ui.node('.scan-photo-error').textContent, 'Photo required')
+  assert.equal(ui.inserted.length, 0)
+  ui.select(async () => ({ path: 'draft.jpg', webPath: 'preview' }))
+  ui.node('.scan-photo-gallery').emit()
+  await settle()
+  ui.node('.scan-result-add').emit()
+  await settle()
+  assert.deepEqual(ui.inserted, [[3, 9, 'item-photos/saved.jpg']])
+  assert.equal(ui.node('.scan-result-dialog').open, false)
+})
+
+test('an AI result already in the collection reuses the owned-product popup and Close button', async () => {
+  const ui = popup({ product: null, inCollection: true })
+  await ui.scan()
+  ui.ai(async () => ({ brand: 'brand', name: 'product', size: null }))
+  ui.resolve(async () => ({ id: 42, brand: 'Brand', name: 'Existing Product', size: null }))
+  ui.node('.scan-result-ai-search').emit()
+  await settle()
+  assert.deepEqual(ui.memberships, [[42, 3]])
+  assert.equal(ui.node('#scan-result-title').textContent, 'Existing Product already in collection')
+  assert.equal(ui.node('.scan-result-dismiss').hidden, false)
+  assert.equal(ui.node('.scan-result-add').hidden, true)
+  assert.equal(ui.node('.scan-result-product').hidden, true)
+  assert.equal(ui.node('.scan-result-ai-search').hidden, true)
+  ui.node('.scan-result-dismiss').emit()
+  assert.equal(ui.node('.scan-result-dialog').open, false)
+})
+
+test('AI lookup errors display inside the popup without saving data and allow retry', async () => {
+  const ui = popup({ product: null })
+  await ui.scan()
+  ui.ai(async () => { throw new Error('Product not found') })
+  ui.node('.scan-result-ai-search').emit()
+  await settle()
+  assert.equal(ui.node('.scan-result-error').textContent, 'Product not found')
+  assert.equal(ui.node('.scan-result-error').hidden, false)
+  assert.equal(ui.node('.scan-result-ai-search').disabled, false)
+  assert.equal(ui.node('.scan-result-ai-search').hidden, false)
+  assert.equal(ui.node('.scan-result-product').hidden, true)
+  assert.equal(ui.resolved.length, 0)
+  ui.ai(async () => ({ brand: 'brand', name: 'product', size: null }))
+  ui.node('.scan-result-ai-search').emit()
+  await settle()
+  assert.equal(ui.node('.scan-result-error').hidden, true)
+  assert.equal(ui.node('.scan-result-add').hidden, false)
+  assert.equal(ui.node('.scan-product-size-row').hidden, true)
+  ui.node('.scan-result-close').emit()
+  assert.equal(ui.resolved.length, 1, 'Resolved product and barcode remain after cancelling the photo step')
+  assert.equal(ui.inserted.length, 0)
+})
+
+test('database failures during AI resolution are displayed and can be retried', async () => {
+  const ui = popup({ product: null })
+  await ui.scan()
+  ui.ai(async () => ({ brand: 'brand', name: 'product', size: null }))
+  ui.resolve(async () => { throw new Error('Database unavailable') })
+  ui.node('.scan-result-ai-search').emit()
+  await settle()
+  assert.equal(ui.node('.scan-result-error').textContent, 'Database unavailable')
+  assert.equal(ui.node('.scan-result-ai-search').disabled, false)
+  assert.equal(ui.node('.scan-result-product').hidden, true)
+  ui.resolve(async () => ({ id: 10, brand: 'brand', name: 'product', size: null }))
+  ui.node('.scan-result-ai-search').emit()
+  await settle()
+  assert.equal(ui.node('.scan-result-error').hidden, true)
+  assert.equal(ui.node('.scan-result-add').hidden, false)
+  ui.unmount()
+})
+
+test('closing, leaving or starting another scan aborts AI lookup and ignores late responses', async () => {
+  for (const action of ['close', 'leave', 'scan']) {
+    const ui = popup({ product: null })
+    await ui.scan()
+    const pending = deferred()
+    let signal
+    ui.ai((barcode, options) => { signal = options.signal; return pending.promise })
+    ui.node('.scan-result-ai-search').emit()
+    if (action === 'close') ui.node('.scan-result-close').emit()
+    else if (action === 'leave') ui.unmount()
+    else {
+      ui.result({ id: 12, brand: 'New', name: 'Scan', size: null })
+      await ui.scan('new-barcode')
+    }
+    assert.equal(signal.aborted, true)
+    pending.resolve({ brand: 'late', name: 'result', size: null })
+    await settle()
+    assert.equal(ui.resolved.length, 0)
+    assert.equal(ui.inserted.length, 0)
+    if (action === 'scan') {
+      assert.equal(ui.node('.scan-product-brand').textContent, 'New')
+      assert.equal(ui.node('.scan-product-name').textContent, 'Scan')
+    } else assert.equal(ui.node('.scan-result-dialog').open, false)
+  }
 })

@@ -2,8 +2,9 @@ import { models } from './models.js'
 import { ProductLookupError } from './errors.js'
 import { callGemini } from './providers/gemini.js'
 import { callDeepSeek } from './providers/deepseek.js'
+import { callOpenAI } from './providers/openai.js'
 
-const providers = { gemini: callGemini, deepseek: callDeepSeek }
+const providers = { gemini: callGemini, deepseek: callDeepSeek, openai: callOpenAI }
 const productSchema = {
   type: 'object',
   properties: {

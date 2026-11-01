@@ -95,6 +95,7 @@ test('OpenAI rejects refusals, incomplete responses and malformed products', asy
 })
 
 test('OpenAI sanitizes HTTP errors and malformed upstream JSON', async t => {
+  t.mock.method(console, 'error', () => {})
   for (const [status, expected] of [[400, 502], [401, 502], [403, 502], [429, 503], [500, 502]]) {
     const provider = t.mock.method(globalThis, 'fetch', async () => new Response('private caller-secret', { status }))
     try {
@@ -107,6 +108,33 @@ test('OpenAI sanitizes HTTP errors and malformed upstream JSON', async t => {
   }
   t.mock.method(globalThis, 'fetch', async () => new Response('not JSON'))
   assert.equal((await request()).status, 502)
+})
+
+test('temporary OpenAI diagnostics log upstream details without exposing keys or changing public errors', async t => {
+  const logs = []
+  t.mock.method(console, 'error', (...args) => logs.push(args))
+  for (const status of [400, 401, 429, 500]) {
+    const provider = t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify({
+      error: { code: 'test_error', message: 'Rejected caller-secret and sk-proj-masked***key' },
+    }), { status, headers: { 'x-request-id': 'req-test' } }))
+    try {
+      const response = await request()
+      assert.equal(response.status, status === 429 ? 503 : 502)
+      assert.ok(!(await response.text()).includes('test_error'))
+      const [label, details] = logs.at(-1)
+      assert.equal(label, 'OpenAI lookup upstream error')
+      assert.equal(details.status, status)
+      assert.equal(details.requestId, 'req-test')
+      assert.equal(details.model, 'gpt-6-luna')
+      assert.ok(details.body.includes('test_error'))
+      assert.ok(details.body.includes('[REDACTED]'))
+      assert.ok(!details.body.includes('caller-secret'))
+      assert.ok(!details.body.includes('sk-proj-'))
+    } finally {
+      provider.mock.restore()
+    }
+  }
+  assert.equal(logs.length, 4)
 })
 
 test('OpenAI maps timeout, cancellation and network failures to controlled errors', async t => {

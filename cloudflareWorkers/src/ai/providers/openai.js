@@ -21,17 +21,6 @@ export async function callOpenAI({ model, apiKey, prompt, schema, signal }) {
         text: { format: { type: 'json_schema', name: 'product_lookup', strict: true, schema } },
       }),
     })
-    // Temporary diagnostics for upstream failures; redact credentials before logging
-    if (!response.ok) {
-      const body = await response.text()
-      const redacted = body.replaceAll(apiKey, '[REDACTED]').replace(/sk-[A-Za-z0-9_.*-]+/g, '[REDACTED]')
-      console.error('OpenAI lookup upstream error', {
-        status: response.status,
-        requestId: response.headers.get('x-request-id'),
-        model,
-        body: redacted.slice(0, 4000),
-      })
-    }
     if (response.status === 429) throw new ProductLookupError('AI provider rate limit exceeded. Please try again later.', 503)
     if (!response.ok) throw new ProductLookupError('AI provider could not complete the lookup. Check API access and try again.')
 

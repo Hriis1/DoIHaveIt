@@ -19,7 +19,7 @@ const json = value => new Response(JSON.stringify(value), { headers: { 'Content-
 
 test('Gemini is enabled for both key sources', () => {
   assert.deepEqual(supported, ['gemini'])
-  assert.deepEqual(supportedWithKey, ['gemini'])
+  assert.deepEqual(supportedWithKey, ['gemini', 'deepseek'])
 })
 
 test('app-key lookup sends the exact barcode, search tool and schema once and accepts a product without source metadata', async t => {

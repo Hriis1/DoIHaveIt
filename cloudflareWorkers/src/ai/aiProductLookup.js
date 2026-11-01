@@ -1,9 +1,8 @@
 import { models } from './models.js'
 import { ProductLookupError } from './errors.js'
 import { callGemini } from './providers/gemini.js'
-import { callQwen } from './providers/qwen.js'
 
-const providers = { gemini: callGemini, qwen: callQwen }
+const providers = { gemini: callGemini }
 const productSchema = {
   type: 'object',
   properties: {

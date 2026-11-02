@@ -8,7 +8,7 @@
     <fieldset class="ai-provider-fields">
       <legend class="ai-provider-sr">Provider settings</legend>
       <div class="ai-provider-modes">
-        <label><input type="radio" name="ai-key-source" value="app" checked /> Use app’s key <span>Gemini</span></label>
+        <label><input type="radio" name="ai-key-source" value="app" checked /> Use app credits <span>Gemini</span></label>
         <label><input type="radio" name="ai-key-source" value="own" /> Use my own key</label>
       </div>
 
@@ -26,7 +26,7 @@
           <input id="ai-api-key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-describedby="ai-key-help" placeholder="Paste your API key" />
           <button class="ai-key-visibility" type="button" aria-label="Show API key" aria-pressed="false"><svg aria-hidden="true"><use href="#icon-eye" /></svg></button>
         </div>
-        <p id="ai-key-help">Paste a key from your provider’s website. Saving a new key replaces the saved one for this provider.</p>
+        <p id="ai-key-help">Saving a new key replaces the saved one for this provider.</p>
         <div class="ai-key-actions">
           <button class="primary-button ai-key-save" type="submit">Save key</button>
           <button class="secondary-button ai-key-remove" type="button" disabled>Remove saved key</button>

@@ -4,8 +4,10 @@ import { beforeEach, mock, test } from 'node:test'
 let settings
 const getApiKey = mock.fn()
 const getAiProviderSettings = mock.fn()
+const lookupProduct = mock.fn()
 mock.module('../src/modules/aiProviderSettings.js', { namedExports: { getAiProviderSettings } })
 mock.module('../src/modules/apiKeyStorage.js', { namedExports: { getApiKey } })
+mock.module('../src/modules/ai/directProductLookup.js', { namedExports: { lookupProduct } })
 const { lookupProductWithAi } = await import('../src/modules/aiProductLookup.js')
 
 beforeEach(() => {
@@ -13,6 +15,8 @@ beforeEach(() => {
   getAiProviderSettings.mock.mockImplementation(() => ({ ...settings }))
   getApiKey.mock.resetCalls()
   getApiKey.mock.mockImplementation(async () => null)
+  lookupProduct.mock.resetCalls()
+  lookupProduct.mock.mockImplementation(async () => product)
 })
 
 const product = { brand: ' Марка ', name: ' МЛЯКО ', size: ' 500 ML ' }
@@ -32,27 +36,31 @@ test('AI client sends the barcode with the app key option and returns normalized
     brand: 'марка', name: 'мляко', size: '500 ml',
   })
   assert.equal(getApiKey.mock.callCount(), 0)
+  assert.equal(lookupProduct.mock.callCount(), 0)
 })
 
 test('AI client reads the current selection and sends only that provider’s own key on each search', async t => {
   getApiKey.mock.mockImplementation(async provider => ` test-key-${provider} `)
   const requests = []
-  t.mock.method(globalThis, 'fetch', async (url, options) => {
+  const fetch = t.mock.method(globalThis, 'fetch', async (url, options) => {
     requests.push(JSON.parse(options.body))
     return Response.json(product)
   })
   for (const provider of ['gemini', 'deepseek', 'openai']) {
     settings = { useAppKey: false, provider }
-    await lookupProductWithAi('123')
-    assert.deepEqual(requests.at(-1), {
-      barcode: '123', use_app_key: false, model: provider, api_key: `test-key-${provider}`,
+    assert.deepEqual(await lookupProductWithAi('123'), { brand: 'марка', name: 'мляко', size: '500 ml' })
+    assert.deepEqual(lookupProduct.mock.calls.at(-1).arguments[0], {
+      barcode: '123', model: provider, apiKey: `test-key-${provider}`, signal: undefined,
     })
   }
+  assert.equal(fetch.mock.callCount(), 0)
   assert.deepEqual(getApiKey.mock.calls.map(call => call.arguments), [['gemini'], ['deepseek'], ['openai']])
   settings.useAppKey = true
   await lookupProductWithAi('123')
   assert.deepEqual(requests.at(-1), { barcode: '123', use_app_key: true, model: 'gemini' })
   assert.equal(getApiKey.mock.callCount(), 3)
+  assert.equal(lookupProduct.mock.callCount(), 3)
+  assert.equal(fetch.mock.callCount(), 1)
 })
 
 test('missing own keys prevent requests without falling back to the app key', async t => {
@@ -60,9 +68,10 @@ test('missing own keys prevent requests without falling back to the app key', as
   const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(product))
   for (const value of [null, '', ' ']) {
     getApiKey.mock.mockImplementation(async () => value)
-    await assert.rejects(lookupProductWithAi('123'), /No API key saved.*Open AI Search/)
+    await assert.rejects(lookupProductWithAi('123'), /No API key saved.*AI Search/)
   }
   assert.equal(fetch.mock.callCount(), 0)
+  assert.equal(lookupProduct.mock.callCount(), 0)
 })
 
 test('settings and key storage failures are actionable and do not send requests or expose native details', async t => {
@@ -74,12 +83,12 @@ test('settings and key storage failures are actionable and do not send requests 
   getAiProviderSettings.mock.mockImplementation(() => ({ useAppKey: false, provider: 'deepseek' }))
   getApiKey.mock.mockImplementation(async () => { throw new Error('Private storage details') })
   await assert.rejects(lookupProductWithAi('123'), {
-    message: 'Could not read your saved API key. Open AI Search from the app menu and try again.',
+    message: 'Could not read your saved API key. Please check your AI Search settings and try again.',
   })
   assert.equal(fetch.mock.callCount(), 0)
 })
 
-test('cancelling before or during a key read prevents sending the key to the Worker', async t => {
+test('cancelling before or during a key read prevents sending the key to a provider', async t => {
   const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(product))
   const alreadyCancelled = new AbortController()
   alreadyCancelled.abort()
@@ -98,6 +107,21 @@ test('cancelling before or during a key read prevents sending the key to the Wor
     await assert.rejects(pending, { name: 'AbortError' })
   }
   assert.equal(fetch.mock.callCount(), 0)
+  assert.equal(lookupProduct.mock.callCount(), 0)
+})
+
+test('direct lookup forwards cancellation, preserves errors and reports an unidentified product', async t => {
+  settings = { useAppKey: false, provider: 'openai' }
+  getApiKey.mock.mockImplementation(async () => 'test-key')
+  t.mock.method(globalThis, 'fetch', () => assert.fail('Own keys must not reach the Worker'))
+  const controller = new AbortController()
+  lookupProduct.mock.mockImplementation(async options => {
+    assert.equal(options.signal, controller.signal)
+    return null
+  })
+  await assert.rejects(lookupProductWithAi('123', { signal: controller.signal }), { message: 'Product not found' })
+  lookupProduct.mock.mockImplementation(async () => { throw new Error('AI provider rate limit exceeded.') })
+  await assert.rejects(lookupProductWithAi('123'), /rate limit exceeded/)
 })
 
 test('AI client preserves null sizes and displays Worker error messages', async t => {

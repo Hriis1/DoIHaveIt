@@ -1,11 +1,25 @@
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
-import { lookupProductWithAi } from '../src/modules/aiProductLookup.js'
+import { beforeEach, mock, test } from 'node:test'
+
+let settings
+const getApiKey = mock.fn()
+const getAiProviderSettings = mock.fn()
+mock.module('../src/modules/aiProviderSettings.js', { namedExports: { getAiProviderSettings } })
+mock.module('../src/modules/apiKeyStorage.js', { namedExports: { getApiKey } })
+const { lookupProductWithAi } = await import('../src/modules/aiProductLookup.js')
+
+beforeEach(() => {
+  settings = { useAppKey: true, provider: 'gemini' }
+  getAiProviderSettings.mock.mockImplementation(() => ({ ...settings }))
+  getApiKey.mock.resetCalls()
+  getApiKey.mock.mockImplementation(async () => null)
+})
 
 const product = { brand: ' Марка ', name: ' МЛЯКО ', size: ' 500 ML ' }
 
 test('AI client sends the barcode with the app key option and returns normalized product fields', async t => {
   const controller = new AbortController()
+  settings.provider = 'openai'
   t.mock.method(globalThis, 'fetch', async (url, options) => {
     assert.equal(url, 'https://doihaveit-api.hrishd.workers.dev/products/lookup')
     assert.equal(options.method, 'POST')
@@ -17,6 +31,73 @@ test('AI client sends the barcode with the app key option and returns normalized
   assert.deepEqual(await lookupProductWithAi('004062139018352', { signal: controller.signal }), {
     brand: 'марка', name: 'мляко', size: '500 ml',
   })
+  assert.equal(getApiKey.mock.callCount(), 0)
+})
+
+test('AI client reads the current selection and sends only that provider’s own key on each search', async t => {
+  getApiKey.mock.mockImplementation(async provider => ` test-key-${provider} `)
+  const requests = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requests.push(JSON.parse(options.body))
+    return Response.json(product)
+  })
+  for (const provider of ['gemini', 'deepseek', 'openai']) {
+    settings = { useAppKey: false, provider }
+    await lookupProductWithAi('123')
+    assert.deepEqual(requests.at(-1), {
+      barcode: '123', use_app_key: false, model: provider, api_key: `test-key-${provider}`,
+    })
+  }
+  assert.deepEqual(getApiKey.mock.calls.map(call => call.arguments), [['gemini'], ['deepseek'], ['openai']])
+  settings.useAppKey = true
+  await lookupProductWithAi('123')
+  assert.deepEqual(requests.at(-1), { barcode: '123', use_app_key: true, model: 'gemini' })
+  assert.equal(getApiKey.mock.callCount(), 3)
+})
+
+test('missing own keys prevent requests without falling back to the app key', async t => {
+  settings = { useAppKey: false, provider: 'openai' }
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(product))
+  for (const value of [null, '', ' ']) {
+    getApiKey.mock.mockImplementation(async () => value)
+    await assert.rejects(lookupProductWithAi('123'), /No API key saved.*Open AI Search/)
+  }
+  assert.equal(fetch.mock.callCount(), 0)
+})
+
+test('settings and key storage failures are actionable and do not send requests or expose native details', async t => {
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(product))
+  getAiProviderSettings.mock.mockImplementation(() => { throw new Error('Private storage details') })
+  await assert.rejects(lookupProductWithAi('123'), {
+    message: 'Could not read your AI Search settings. Open AI Search from the app menu and try again.',
+  })
+  getAiProviderSettings.mock.mockImplementation(() => ({ useAppKey: false, provider: 'deepseek' }))
+  getApiKey.mock.mockImplementation(async () => { throw new Error('Private storage details') })
+  await assert.rejects(lookupProductWithAi('123'), {
+    message: 'Could not read your saved API key. Open AI Search from the app menu and try again.',
+  })
+  assert.equal(fetch.mock.callCount(), 0)
+})
+
+test('cancelling before or during a key read prevents sending the key to the Worker', async t => {
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(product))
+  const alreadyCancelled = new AbortController()
+  alreadyCancelled.abort()
+  await assert.rejects(lookupProductWithAi('123', { signal: alreadyCancelled.signal }), { name: 'AbortError' })
+  assert.equal(getApiKey.mock.callCount(), 0)
+  settings = { useAppKey: false, provider: 'openai' }
+  for (const failRead of [false, true]) {
+    let finishRead
+    getApiKey.mock.mockImplementation(() => new Promise((resolve, reject) => {
+      finishRead = () => failRead ? reject(new Error('Storage failed')) : resolve('test-only-key')
+    }))
+    const controller = new AbortController()
+    const pending = lookupProductWithAi('123', { signal: controller.signal })
+    controller.abort()
+    finishRead()
+    await assert.rejects(pending, { name: 'AbortError' })
+  }
+  assert.equal(fetch.mock.callCount(), 0)
 })
 
 test('AI client preserves null sizes and displays Worker error messages', async t => {

@@ -1,10 +1,36 @@
+import { getAiProviderSettings } from './aiProviderSettings.js'
+import { getApiKey } from './apiKeyStorage.js'
+
 export async function lookupProductWithAi(barcode, { signal } = {}) {
+  signal?.throwIfAborted()
+  let settings
+  try {
+    settings = getAiProviderSettings()
+  } catch {
+    throw new Error('Could not read your AI Search settings. Open AI Search from the app menu and try again.')
+  }
+  const body = { barcode, use_app_key: settings.useAppKey, model: settings.useAppKey ? 'gemini' : settings.provider }
+  if (!settings.useAppKey) {
+    let apiKey
+    try {
+      apiKey = await getApiKey(settings.provider)
+    } catch {
+      signal?.throwIfAborted()
+      throw new Error('Could not read your saved API key. Please check your AI Search settings and try again.')
+    }
+    signal?.throwIfAborted()
+    if (typeof apiKey !== 'string' || !apiKey.trim()) {
+      throw new Error('No API key saved for the selected provider. Configure it in AI Search from the app menu and try again.')
+    }
+    body.api_key = apiKey.trim()
+  }
+
   let response
   try {
     response = await fetch('https://doihaveit-api.hrishd.workers.dev/products/lookup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ barcode, use_app_key: true, model: 'gemini' }),
+      body: JSON.stringify(body),
       signal,
     })
   } catch (error) {

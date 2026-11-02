@@ -5,6 +5,7 @@ import { mountCollectionsScreen } from './screens/collections/collections.js'
 import { mountCollectionScreen } from './screens/collection/collection.js'
 import { mountCatalogsScreen } from './screens/catalogs/catalogs.js'
 import { mountProductsScreen } from './screens/products/products.js'
+import { mountAiProviderScreen } from './screens/aiProvider/aiProvider.js'
 import { prepareCatalogCache } from './modules/catalog/archive.js'
 import { App } from '@capacitor/app'
 import { preparePhotoCache, discardCameraResult } from './modules/itemPhotos.js'
@@ -24,7 +25,7 @@ if (isNative) {
     }
   }).catch(error => console.warn('Could not register camera recovery:', error))
 }
-const screens = { collections: mountCollectionsScreen, collection: mountCollectionScreen, catalogs: mountCatalogsScreen, products: mountProductsScreen }
+const screens = { collections: mountCollectionsScreen, collection: mountCollectionScreen, catalogs: mountCatalogsScreen, products: mountProductsScreen, 'ai-provider': mountAiProviderScreen }
 let unmountScreen
 
 // Dismiss the shared dropdown when leaving it or selecting an entry

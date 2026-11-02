@@ -2,12 +2,14 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import worker from '../src/index.js'
 import { callDeepSeek } from '../src/ai/providers/deepseek.js'
+import { lookupProduct } from '../src/ai/aiProductLookup.js'
 
 const product = { brand: 'Brand', name: 'Product', size: '500 ml' }
 const input = { barcode: '070847891857', model: 'deepseek', use_app_key: false, api_key: 'caller-secret' }
-const request = (body = input, env = {}, signal) => worker.fetch(new Request('https://example.com/products/lookup', {
-  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal,
+const publicRequest = (body = input, env = {}) => worker.fetch(new Request('https://example.com/products/lookup', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 }), env)
+const request = signal => lookupProduct({ barcode: input.barcode, model: input.model, apiKey: input.api_key, signal })
 const json = value => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } })
 const answer = (value = product) => ({
   type: 'message', role: 'assistant', stop_reason: 'end_turn',
@@ -36,18 +38,14 @@ test('DeepSeek sends one direct non-streaming lookup with caller key, bounded se
     assert.deepEqual(schema.properties.product.anyOf[0].required, ['brand', 'name', 'size'])
     return json(answer())
   })
-  const response = await request(input, { DEEPSEEK_API_KEY: 'ignored-app-key' })
-  assert.equal(response.status, 200)
-  assert.deepEqual(await response.json(), product)
-  assert.equal(response.headers.get('cache-control'), 'no-store')
-  assert.equal(response.headers.get('access-control-allow-origin'), '*')
+  assert.deepEqual(await request(), product)
   assert.equal(calls, 1)
 })
 
-test('DeepSeek is caller-key only and missing caller keys never fall back to app keys', async t => {
+test('the public route rejects DeepSeek options without calling the provider', async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('Must not call provider'))
   for (const body of [{ ...input, use_app_key: true }, { ...input, api_key: undefined }, { ...input, api_key: ' ' }]) {
-    assert.equal((await request(body, { DEEPSEEK_API_KEY: 'app-key' })).status, 400)
+    assert.equal((await publicRequest(body, { DEEPSEEK_API_KEY: 'app-key' })).status, 400)
   }
 })
 
@@ -60,16 +58,12 @@ test('DeepSeek collects answer text blocks and ignores thinking and search metad
     { type: 'web_search_tool_result', content: [] },
     { type: 'text', text: text.slice(0, 15) }, { type: 'text', text: text.slice(15) },
   ] }))
-  const response = await request()
-  assert.equal(response.status, 200)
-  assert.deepEqual(await response.json(), { brand: 'марка', name: 'мляко', size: null })
+  assert.deepEqual(await request(), { brand: 'марка', name: 'мляко', size: null })
 })
 
-test('DeepSeek no-match returns the shared not-found response', async t => {
+test('DeepSeek no-match remains available through the internal lookup', async t => {
   t.mock.method(globalThis, 'fetch', async () => json(answer(null)))
-  const response = await request()
-  assert.equal(response.status, 404)
-  assert.deepEqual(await response.json(), { error: 'Product not found' })
+  assert.equal(await request(), null)
 })
 
 test('DeepSeek rejects malformed products and incomplete or paused generations', async t => {
@@ -81,7 +75,7 @@ test('DeepSeek rejects malformed products and incomplete or paused generations',
   ]) {
     const provider = t.mock.method(globalThis, 'fetch', async () => json(value))
     try {
-      assert.equal((await request()).status, 502, JSON.stringify(value))
+      await assert.rejects(request(), error => error.status === 502)
     } finally {
       provider.mock.restore()
     }
@@ -92,15 +86,13 @@ test('DeepSeek sanitizes upstream HTTP errors and invalid JSON', async t => {
   for (const [status, expected] of [[400, 502], [401, 502], [403, 502], [429, 503], [500, 502]]) {
     const provider = t.mock.method(globalThis, 'fetch', async () => new Response('private caller-secret', { status }))
     try {
-      const response = await request()
-      assert.equal(response.status, expected)
-      assert.ok(!(await response.text()).includes('caller-secret'))
+      await assert.rejects(request(), error => error.status === expected && !error.message.includes('caller-secret'))
     } finally {
       provider.mock.restore()
     }
   }
   t.mock.method(globalThis, 'fetch', async () => new Response('not JSON'))
-  assert.equal((await request()).status, 502)
+  await assert.rejects(request(), error => error.status === 502)
 })
 
 test('DeepSeek maps timeout, cancellation and network failures to controlled errors', async t => {
@@ -108,9 +100,7 @@ test('DeepSeek maps timeout, cancellation and network failures to controlled err
     [new DOMException('caller-secret', 'AbortError'), 504], [new Error('caller-secret'), 502]]) {
     const provider = t.mock.method(globalThis, 'fetch', async () => { throw error })
     try {
-      const response = await request()
-      assert.equal(response.status, status)
-      assert.ok(!(await response.text()).includes('caller-secret'))
+      await assert.rejects(request(), error => error.status === status && !error.message.includes('caller-secret'))
     } finally {
       provider.mock.restore()
     }
@@ -125,7 +115,7 @@ test('DeepSeek passes request cancellation upstream and skips already cancelled 
     controller.abort()
     options.signal.throwIfAborted()
   })
-  assert.equal((await request(input, {}, controller.signal)).status, 504)
+  await assert.rejects(request(controller.signal), error => error.status === 504)
   assert.equal(upstreamSignal.aborted, true)
   t.mock.method(globalThis, 'fetch', () => assert.fail('Must not call provider'))
   await assert.rejects(callDeepSeek({ model: 'deepseek-flash', signal: controller.signal }), error => error.status === 504)

@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import worker from '../src/index.js'
 import { supported, supportedWithKey } from '../src/ai/models.js'
 
-const input = { barcode: '0036000291452', model: 'gemini', use_app_key: true }
+const input = { barcode: '0036000291452' }
 const product = { brand: 'Brand', name: 'Product', size: '500 ml' }
 const request = (body = input, env = { GEMINI_API_KEY: 'app-secret' }, method = 'POST') => worker.fetch(new Request('https://example.com/products/lookup', {
   method,
@@ -17,7 +17,7 @@ const answer = (value = product) => ({
 })
 const json = value => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } })
 
-test('Gemini is enabled for both key sources', () => {
+test('provider and key-source infrastructure remains available internally', () => {
   assert.deepEqual(supported, ['gemini'])
   assert.deepEqual(supportedWithKey, ['gemini', 'deepseek', 'openai'])
 })
@@ -39,7 +39,7 @@ test('app-key lookup sends the exact barcode, search tool and schema once and ac
     assert.ok(body.contents[0].parts[0].text.includes('"0036000291452"'))
     return json(answer())
   })
-  const response = await request({ ...input, api_key: 'ignored-caller-key' })
+  const response = await request({ barcode: ` ${input.barcode} ` }, { GEMINI_API_KEY: ' app-secret ', OPENAI_API_KEY: 'unused-key' })
   assert.equal(response.status, 200)
   assert.deepEqual(await response.json(), product)
   assert.equal(response.headers.get('access-control-allow-origin'), '*')
@@ -47,24 +47,22 @@ test('app-key lookup sends the exact barcode, search tool and schema once and ac
   assert.equal(calls, 1)
 })
 
-test('caller-key lookup uses api_key even if an app key exists, and also works without an app key', async t => {
+test('barcode-only lookup preserves null product sizes', async t => {
   t.mock.method(globalThis, 'fetch', async (url, options) => {
-    assert.equal(options.headers['x-goog-api-key'], 'caller-secret')
+    assert.equal(options.headers['x-goog-api-key'], 'app-secret')
     return json(answer({ ...product, size: null }))
   })
-  for (const env of [{}, { GEMINI_API_KEY: 'app-secret' }]) {
-    const response = await request({ ...input, use_app_key: false, api_key: 'caller-secret' }, env)
-    assert.equal(response.status, 200)
-    assert.deepEqual(await response.json(), { ...product, size: null })
-  }
+  const response = await request()
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), { ...product, size: null })
 })
 
 test('validation rejects missing or incorrectly typed fields without calling a provider', async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('Invalid requests must not call Gemini'))
   for (const body of [null, [], 'text', {},
     { ...input, barcode: undefined }, { ...input, barcode: 36000291452 }, { ...input, barcode: ' ' },
-    { ...input, use_app_key: undefined }, { ...input, use_app_key: 'false' }, { ...input, use_app_key: 1 },
-    { ...input, use_app_key: null }, { ...input, model: undefined }, { ...input, model: '' },
+    { ...input, use_app_key: true }, { ...input, use_app_key: 'false' }, { ...input, use_app_key: 1 },
+    { ...input, use_app_key: null }, { ...input, model: 'gemini' }, { ...input, model: '' },
     { ...input, model: 1 }, { ...input, model: 'other' }, { ...input, model: '__proto__' },
     { barcode: input.barcode, model: 'gemini', use_app_kay: true },
     { ...input, use_app_key: false }, { ...input, use_app_key: false, api_key: '' },
@@ -78,31 +76,24 @@ test('validation rejects missing or incorrectly typed fields without calling a p
   assert.equal(invalidJson.status, 400)
 })
 
-test('key selection never falls back to the other source', async t => {
+test('a missing Gemini secret cannot fall back to another provider or caller key', async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('A missing selected key must stop the request'))
-  const missingApp = await request({ ...input, api_key: 'caller-secret' }, {})
-  assert.equal(missingApp.status, 503)
-  assert.match((await missingApp.json()).error, /not configured/)
-  const missingCaller = await request({ ...input, use_app_key: false })
-  assert.equal(missingCaller.status, 400)
-  assert.match((await missingCaller.json()).error, /api_key is required/)
+  for (const env of [{}, { GEMINI_API_KEY: '' }, { GEMINI_API_KEY: ' ' }, { OPENAI_API_KEY: 'other-key' }]) {
+    const missingApp = await request(input, env)
+    assert.equal(missingApp.status, 503)
+    assert.match((await missingApp.json()).error, /not configured/)
+  }
+  assert.equal((await request({ ...input, api_key: 'caller-secret' }, {})).status, 400)
 })
 
-test('each key source checks only its own support group', async t => {
-  t.mock.method(globalThis, 'fetch', async () => json(answer()))
-  supported.splice(0, 1)
-  try {
-    assert.equal((await request()).status, 400)
-    assert.equal((await request({ ...input, use_app_key: false, api_key: 'caller-secret' })).status, 200)
-  } finally {
-    supported.push('gemini')
-  }
-  supportedWithKey.splice(0, 1)
-  try {
-    assert.equal((await request()).status, 200)
-    assert.equal((await request({ ...input, use_app_key: false, api_key: 'caller-secret' })).status, 400)
-  } finally {
-    supportedWithKey.push('gemini')
+test('the public route rejects model overrides, key-source selection and all other extra fields', async t => {
+  t.mock.method(globalThis, 'fetch', () => assert.fail('Extra fields must not reach any provider'))
+  for (const extra of [{ model: 'openai' }, { model: 'deepseek' }, { model: 'gemini' },
+    { use_app_key: true }, { use_app_key: false }, { api_key: 'caller-secret' }, { extra: true },
+    { model: 'openai', use_app_key: false, api_key: 'caller-secret' }]) {
+    const response = await request({ ...input, ...extra })
+    assert.equal(response.status, 400)
+    assert.deepEqual(await response.json(), { error: 'Only barcode is allowed in the request body.' })
   }
 })
 

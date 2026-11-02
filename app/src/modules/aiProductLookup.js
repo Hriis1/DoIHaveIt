@@ -33,7 +33,7 @@ export async function lookupProductWithAi(barcode, { signal } = {}) {
       response = await fetch('https://doihaveit-api.hrishd.workers.dev/products/lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ barcode, use_app_key: true, model: 'gemini' }),
+        body: JSON.stringify({ barcode }),
         signal,
       })
     } catch (error) {

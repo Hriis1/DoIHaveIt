@@ -2,12 +2,14 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import worker from '../src/index.js'
 import { callOpenAI } from '../src/ai/providers/openai.js'
+import { lookupProduct } from '../src/ai/aiProductLookup.js'
 
 const product = { brand: 'Brand', name: 'Product', size: '500 ml' }
 const input = { barcode: '070847891857', model: 'openai', use_app_key: false, api_key: 'caller-secret' }
-const request = (body = input, env = {}, signal) => worker.fetch(new Request('https://example.com/products/lookup', {
-  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal,
+const publicRequest = (body = input, env = {}) => worker.fetch(new Request('https://example.com/products/lookup', {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 }), env)
+const request = signal => lookupProduct({ barcode: input.barcode, model: input.model, apiKey: input.api_key, signal })
 const json = value => new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } })
 const message = content => ({ type: 'message', role: 'assistant', status: 'completed', content })
 const answer = (value = product) => ({ status: 'completed', output: [message([
@@ -39,18 +41,14 @@ test('OpenAI sends one caller-key Responses request with required web search and
     assert.deepEqual(format.schema.properties.product.anyOf[0].required, ['brand', 'name', 'size'])
     return json(answer())
   })
-  const response = await request(input, { OPENAI_API_KEY: 'ignored-app-key' })
-  assert.equal(response.status, 200)
-  assert.deepEqual(await response.json(), product)
-  assert.equal(response.headers.get('cache-control'), 'no-store')
-  assert.equal(response.headers.get('access-control-allow-origin'), '*')
+  assert.deepEqual(await request(), product)
   assert.equal(calls, 1)
 })
 
-test('OpenAI rejects app-key requests and missing caller keys without calling the provider', async t => {
+test('the public route rejects OpenAI options without calling the provider', async t => {
   t.mock.method(globalThis, 'fetch', () => assert.fail('Must not call provider'))
   for (const body of [{ ...input, use_app_key: true }, { ...input, api_key: undefined }, { ...input, api_key: ' ' }]) {
-    assert.equal((await request(body, { OPENAI_API_KEY: 'app-key' })).status, 400)
+    assert.equal((await publicRequest(body, { OPENAI_API_KEY: 'app-key' })).status, 400)
   }
 })
 
@@ -61,16 +59,12 @@ test('OpenAI extracts raw REST answer blocks, ignoring tool and reasoning output
     { type: 'web_search_call', status: 'completed', action: { type: 'search', query: input.barcode } },
     message([{ type: 'output_text', text: text.slice(0, 15) }, { type: 'output_text', text: text.slice(15), annotations: [] }]),
   ] }))
-  const response = await request()
-  assert.equal(response.status, 200)
-  assert.deepEqual(await response.json(), { brand: 'марка', name: 'мляко', size: null })
+  assert.deepEqual(await request(), { brand: 'марка', name: 'мляко', size: null })
 })
 
-test('OpenAI null product returns the shared not-found response', async t => {
+test('OpenAI null product remains available through the internal lookup', async t => {
   t.mock.method(globalThis, 'fetch', async () => json(answer(null)))
-  const response = await request()
-  assert.equal(response.status, 404)
-  assert.deepEqual(await response.json(), { error: 'Product not found' })
+  assert.equal(await request(), null)
 })
 
 test('OpenAI rejects refusals, incomplete responses and malformed products', async t => {
@@ -85,9 +79,7 @@ test('OpenAI rejects refusals, incomplete responses and malformed products', asy
   ]) {
     const provider = t.mock.method(globalThis, 'fetch', async () => json(value))
     try {
-      const response = await request()
-      assert.equal(response.status, 502, JSON.stringify(value))
-      assert.ok(!(await response.text()).includes('caller-secret'))
+      await assert.rejects(request(), error => error.status === 502 && !error.message.includes('caller-secret'))
     } finally {
       provider.mock.restore()
     }
@@ -98,15 +90,13 @@ test('OpenAI sanitizes HTTP errors and malformed upstream JSON', async t => {
   for (const [status, expected] of [[400, 502], [401, 502], [403, 502], [429, 503], [500, 502]]) {
     const provider = t.mock.method(globalThis, 'fetch', async () => new Response('private caller-secret', { status }))
     try {
-      const response = await request()
-      assert.equal(response.status, expected)
-      assert.ok(!(await response.text()).includes('caller-secret'))
+      await assert.rejects(request(), error => error.status === expected && !error.message.includes('caller-secret'))
     } finally {
       provider.mock.restore()
     }
   }
   t.mock.method(globalThis, 'fetch', async () => new Response('not JSON'))
-  assert.equal((await request()).status, 502)
+  await assert.rejects(request(), error => error.status === 502)
 })
 
 test('OpenAI maps timeout, cancellation and network failures to controlled errors', async t => {
@@ -114,9 +104,7 @@ test('OpenAI maps timeout, cancellation and network failures to controlled error
     [new DOMException('caller-secret', 'AbortError'), 504], [new Error('caller-secret'), 502]]) {
     const provider = t.mock.method(globalThis, 'fetch', async () => { throw error })
     try {
-      const response = await request()
-      assert.equal(response.status, status)
-      assert.ok(!(await response.text()).includes('caller-secret'))
+      await assert.rejects(request(), error => error.status === status && !error.message.includes('caller-secret'))
     } finally {
       provider.mock.restore()
     }
@@ -131,7 +119,7 @@ test('OpenAI passes cancellation upstream and skips already cancelled requests',
     controller.abort()
     options.signal.throwIfAborted()
   })
-  assert.equal((await request(input, {}, controller.signal)).status, 504)
+  await assert.rejects(request(controller.signal), error => error.status === 504)
   assert.equal(upstreamSignal.aborted, true)
   t.mock.method(globalThis, 'fetch', () => assert.fail('Must not call provider'))
   await assert.rejects(callOpenAI({ model: 'gpt-6-luna', signal: controller.signal }), error => error.status === 504)

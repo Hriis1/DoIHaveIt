@@ -29,7 +29,7 @@ test('AI client sends the barcode with the app key option and returns normalized
     assert.equal(options.method, 'POST')
     assert.equal(options.headers['Content-Type'], 'application/json')
     assert.equal(options.signal, controller.signal)
-    assert.deepEqual(JSON.parse(options.body), { barcode: '004062139018352', use_app_key: true, model: 'gemini' })
+    assert.deepEqual(JSON.parse(options.body), { barcode: '004062139018352' })
     return Response.json(product)
   })
   assert.deepEqual(await lookupProductWithAi('004062139018352', { signal: controller.signal }), {
@@ -57,7 +57,7 @@ test('AI client reads the current selection and sends only that provider’s own
   assert.deepEqual(getApiKey.mock.calls.map(call => call.arguments), [['gemini'], ['deepseek'], ['openai']])
   settings.useAppKey = true
   await lookupProductWithAi('123')
-  assert.deepEqual(requests.at(-1), { barcode: '123', use_app_key: true, model: 'gemini' })
+  assert.deepEqual(requests.at(-1), { barcode: '123' })
   assert.equal(getApiKey.mock.callCount(), 3)
   assert.equal(lookupProduct.mock.callCount(), 3)
   assert.equal(fetch.mock.callCount(), 1)

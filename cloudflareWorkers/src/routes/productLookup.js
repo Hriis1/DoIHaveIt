@@ -1,5 +1,4 @@
 import { respond } from '../http.js'
-import { supported, supportedWithKey } from '../ai/models.js'
 import { lookupProduct } from '../ai/aiProductLookup.js'
 import { ProductLookupError } from '../ai/errors.js'
 
@@ -29,25 +28,18 @@ export async function handleProductLookup(request, env) {
   if (typeof body.barcode !== 'string' || !body.barcode.trim()) {
     return jsonResponse({ error: 'barcode is required and must be a non-empty string.' }, 400)
   }
-  if (typeof body.use_app_key !== 'boolean') {
-    return jsonResponse({ error: 'use_app_key is required and must be a boolean.' }, 400)
-  }
-  if (typeof body.model !== 'string' || !body.model) {
-    return jsonResponse({ error: 'model is required and must be a non-empty string.' }, 400)
+  if (Object.keys(body).some(key => key !== 'barcode')) {
+    return jsonResponse({ error: 'Only barcode is allowed for this endpoint.' }, 400)
   }
 
-  // Select the allowlist and credential source independently; never fall back between them
-  const allowed = body.use_app_key ? supported : supportedWithKey
-  if (!allowed.includes(body.model)) return jsonResponse({ error: 'Model is not supported for this API key source.' }, 400)
-  const apiKey = body.use_app_key ? env[`${body.model.toUpperCase()}_API_KEY`] : body.api_key
+  // Public lookups always use the Worker's Gemini key
+  const apiKey = env.GEMINI_API_KEY
   if (typeof apiKey !== 'string' || !apiKey.trim()) {
-    return body.use_app_key
-      ? jsonResponse({ error: 'App API key is not configured for this model.' }, 503)
-      : jsonResponse({ error: 'Provide your own API key for the chosen model.' }, 400)
+    return jsonResponse({ error: 'App API key is not configured for this model.' }, 503)
   }
 
   try {
-    const product = await lookupProduct({ barcode: body.barcode.trim(), model: body.model, apiKey: apiKey.trim(), signal: request.signal })
+    const product = await lookupProduct({ barcode: body.barcode.trim(), model: 'gemini', apiKey: apiKey.trim(), signal: request.signal })
     return product ? jsonResponse(product) : jsonResponse({ error: 'Product not found' }, 404)
   } catch (error) {
     return error instanceof ProductLookupError

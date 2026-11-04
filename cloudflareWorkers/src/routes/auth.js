@@ -1,3 +1,4 @@
+import isEmail from 'validator/lib/isEmail.js'
 import { respond } from '../http.js'
 import { AuthError } from '../auth/errors.js'
 import { createSessionToken, hashPassword, hashSessionToken, verifyPassword } from '../auth/credentials.js'
@@ -44,7 +45,7 @@ async function readCredentials(request) {
     throw new AuthError('Provide only email and password.', 400)
   }
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
-  if (email.length > 254 || /\p{C}/u.test(email) || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (email.length > 254 || /\p{C}/u.test(email) || !isEmail(email)) {
     throw new AuthError('A valid email address is required.', 400)
   }
   if (typeof body.password !== 'string' || [...body.password].length < 8 || [...body.password].length > 128

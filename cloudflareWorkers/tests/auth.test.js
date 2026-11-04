@@ -117,6 +117,8 @@ test('credential input rejects short passwords, whitespace, controls, invalid em
   for (const action of ['register', 'login']) {
     for (const body of [null, [], {}, 'text', { email: credentials.email }, { ...credentials, email: 'not-an-email' },
       { ...credentials, email: 'user\u0000@example.com' },
+      ...['user..name@example.com', 'user@example..com', 'user@-example.com', 'user@example.com.']
+        .map(email => ({ ...credentials, email })),
       { ...credentials, email: 'a'.repeat(255) + '@example.com' }, { ...credentials, password: 12345678 },
       ...['1234567', '12345678 ', ' 12345678', '1234 678', '1234\t678', '1234\n678', '1234\u0000678', 'a'.repeat(129)]
         .map(password => ({ ...credentials, password })),

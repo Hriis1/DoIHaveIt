@@ -11,5 +11,8 @@
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "validator": "^13.15.35"
   }
 }

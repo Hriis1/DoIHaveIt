@@ -3,7 +3,22 @@
   "name": "doihaveit-api",
   "main": "src/index.js",
   "compatibility_date": "2026-10-17",
+  "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "doihaveit",
+      "database_id": "b912f2a3-cd40-4cb8-baf6-6e1435f0b13f"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "AUTH_RATE_LIMITER",
+      "namespace_id": "428871001",
+      "simple": { "limit": 10, "period": 60 }
+    }
+  ],
   "r2_buckets": [
     {
       "binding": "CATALOGS",

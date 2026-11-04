@@ -1,0 +1,12 @@
+.auth-screen { padding-top: 24px; }
+.auth-description { color: var(--muted); margin: 12px 0 28px; }
+.auth-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.auth-fields label { display: block; font-size: 13px; font-weight: 500; margin: 18px 0 8px; }
+.auth-fields input { width: 100%; padding: 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); font-size: 16px; }
+.auth-fields input[aria-invalid="true"] { border-color: var(--danger); }
+.auth-password-help { color: var(--muted); font-size: 13px; margin: 10px 0; }
+.auth-submit { width: 100%; margin-top: 22px; }
+.auth-switch { width: 100%; }
+.auth-status { color: var(--muted); font-size: 13px; min-height: 20px; margin: 10px 0; }
+.auth-startup { color: var(--muted); }
+.auth-startup button { display: block; width: 100%; margin-top: 16px; }

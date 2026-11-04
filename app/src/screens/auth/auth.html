@@ -1,0 +1,21 @@
+<section class="auth-screen" aria-labelledby="auth-title">
+  <h1 id="auth-title">Log in</h1>
+  <p class="auth-description">Sign in to your credit wallet. Your collections stay on this device.</p>
+  <form class="auth-form" novalidate>
+    <fieldset class="auth-fields">
+      <label for="auth-email">Email</label>
+      <input id="auth-email" name="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required aria-describedby="auth-error" />
+      <label for="auth-password">Password</label>
+      <input id="auth-password" name="password" type="password" autocomplete="current-password" required aria-describedby="auth-error" />
+      <div class="auth-confirm" hidden>
+        <label for="auth-confirm-password">Confirm password</label>
+        <input id="auth-confirm-password" name="confirm-password" type="password" autocomplete="new-password" aria-describedby="auth-error" disabled />
+      </div>
+      <p class="auth-password-help" hidden>Use 8–128 characters with no spaces.</p>
+      <p id="auth-error" class="error" role="alert" hidden></p>
+      <button class="primary-button auth-submit" type="submit">Log in</button>
+    </fieldset>
+  </form>
+  <p class="auth-status" role="status"></p>
+  <button class="secondary-button auth-switch" type="button">Create an account</button>
+</section>

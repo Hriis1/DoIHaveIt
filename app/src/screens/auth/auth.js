@@ -23,7 +23,6 @@ export function mountAuthScreen(container, { navigate, mode = 'login', message =
   let busy = false
 
   screen.querySelector('#auth-title').textContent = title
-  if (registering) screen.querySelector('.auth-description').textContent = 'Create your credit wallet. Your collections stay on this device.'
   screen.querySelector('.auth-confirm').hidden = !registering
   screen.querySelector('.auth-password-help').hidden = !registering
   confirm.disabled = !registering

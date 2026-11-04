@@ -6,11 +6,18 @@ import { handleAuth } from './routes/auth.js'
 export default {
   async fetch(request, env) {
     const url = new URL(request.url)
+
+    //Auth routes
     const auth = url.pathname.match(/^\/auth\/(register|login|me|logout)$/)
     if (auth) return handleAuth(request, env, auth[1])
+
+    //Product look up route
     if (url.pathname === '/products/lookup') return handleProductLookup(request, env)
+
+    //Catalog download route
     const match = url.pathname.match(/^\/catalogs\/([^/]+)$/)
     if (match) return handleCatalogDownload(request, env, match[1])
+
     return respond('Not found', { status: 404 })
   },
 }

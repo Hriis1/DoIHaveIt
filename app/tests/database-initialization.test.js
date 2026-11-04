@@ -7,6 +7,7 @@ const database = new DatabaseSync(':memory:')
 // Simulate a released database with products that predate the search index
 const schema = readFileSync(new URL('../src/database.js', import.meta.url), 'utf8').match(/await database\.execute\(`([\s\S]*?)`\)/)[1]
 database.exec(schema)
+database.exec('DROP TABLE users;')
 database.exec("INSERT INTO products (brand, name, size) VALUES ('Legacy', 'Original Product', '500 ml');")
 after(() => database.close())
 let searchBuilds = 0
@@ -44,6 +45,8 @@ test('initialization shares its promise and creates catalog columns and indexes'
   assert.equal(first, initializeDatabase())
   await first
   assert.equal(connections, 1)
+  assert.deepEqual(database.prepare('PRAGMA table_info(users)').all().map(column => column.name), ['id', 'email', 'credits'])
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM users').get().n, 0)
   for (const table of ['products', 'codes']) {
     assert.ok(database.prepare(`PRAGMA table_info(${table})`).all().some(column => column.name === 'catalog_id'))
   }
@@ -57,6 +60,28 @@ test('initialization shares its promise and creates catalog columns and indexes'
   assert.equal(database.prepare('SELECT brand FROM products WHERE id = 1').get().brand, 'Legacy')
   assert.equal(searchBuilds, 1)
   database.exec('DELETE FROM products;')
+})
+
+test('the current-user table allows one server identity, whole non-negative cached credits and safe reinitialization', () => {
+  const local = new DatabaseSync(':memory:')
+  try {
+    local.exec(schema)
+    const insert = local.prepare('INSERT INTO users (id, email, credits) VALUES (?, ?, ?)')
+    insert.run(42, 'user@example.com', 20)
+    assert.throws(() => insert.run(99, 'another@example.com', 10), /UNIQUE constraint failed/)
+    for (const credits of [-1, 1.5, 'invalid']) {
+      assert.throws(() => local.prepare('UPDATE users SET credits = ?').run(credits), /CHECK constraint failed/)
+    }
+    local.exec(schema)
+    assert.deepEqual({ ...local.prepare('SELECT * FROM users').get() }, { id: 42, email: 'user@example.com', credits: 20 })
+    local.prepare('UPDATE users SET id = ?, email = ?, credits = ?').run(99, 'another@example.com', 0)
+    assert.equal(local.prepare('SELECT COUNT(*) AS n FROM users').get().n, 1)
+    local.exec('DELETE FROM users;')
+    local.prepare('INSERT INTO users (id, email) VALUES (?, ?)').run(123, 'new@example.com')
+    assert.equal(local.prepare('SELECT credits FROM users').get().credits, 0)
+  } finally {
+    local.close()
+  }
 })
 
 test('product identities are unique for both null and known sizes', async () => {

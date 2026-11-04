@@ -63,6 +63,15 @@ async function openDatabase() {
 
   // Create the initial tables without replacing existing data
   await database.execute(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY,
+      email TEXT NOT NULL,
+      credits INTEGER NOT NULL DEFAULT 0
+        CHECK (typeof(credits) = 'integer' AND credits >= 0)
+    );
+    -- Allow only one current wallet while preserving its server-assigned user ID
+    CREATE UNIQUE INDEX IF NOT EXISTS users_singleton ON users((1));
+
     CREATE TABLE IF NOT EXISTS collections (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name VARCHAR(255) NOT NULL UNIQUE,

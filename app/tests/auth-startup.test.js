@@ -27,7 +27,6 @@ function mount(restoreSession) {
     mountCollectionsScreen: screen('collections'), mountCollectionScreen: screen('collection'),
     mountCatalogsScreen: screen('catalogs'), mountProductsScreen: screen('products'),
     mountAiProviderScreen: screen('ai-provider'), mountAuthScreen: screen('auth'),
-    mountAccountScreen: screen('account'),
   }
   runInNewContext(source + '\nthis.show = showScreen', context)
   return { node, mounts, show: context.show }

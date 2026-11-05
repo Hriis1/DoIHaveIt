@@ -13,17 +13,23 @@
       <button class="brand" type="button" aria-label="DoIHaveIt — Collections"><svg aria-hidden="true">
           <use href="#icon-layers" />
         </svg>DoIHaveIt</button>
-      <details class="app-menu">
-        <summary aria-label="App menu"><svg aria-hidden="true">
-            <use href="#icon-menu" />
-          </svg></summary>
-        <div class="app-menu-dropdown">
-          <button type="button" data-screen="account">Account</button>
-          <button type="button" data-screen="ai-provider">AI Search</button>
-          <button type="button" data-screen="catalogs">Catalogs</button>
-          <button type="button" data-screen="products">Products</button>
-        </div>
-      </details>
+      <div class="app-header-actions">
+        <span class="credit-badge" role="img" hidden>
+          <svg aria-hidden="true"><use href="#icon-coins" /></svg>
+          <span class="credit-amount"></span>
+        </span>
+        <details class="app-menu">
+          <summary aria-label="App menu"><svg aria-hidden="true">
+              <use href="#icon-menu" />
+            </svg></summary>
+          <div class="app-menu-dropdown">
+            <button type="button" data-screen="account">Account</button>
+            <button type="button" data-screen="ai-provider">AI Search</button>
+            <button type="button" data-screen="catalogs">Catalogs</button>
+            <button type="button" data-screen="products">Products</button>
+          </div>
+        </details>
+      </div>
     </header>
     <div id="screen-content"></div>
   </main>
@@ -34,6 +40,10 @@
     </symbol>
     <symbol id="icon-menu" viewBox="0 0 24 24">
       <path d="M4 6h16M4 12h16M4 18h16" />
+    </symbol>
+    <symbol id="icon-coins" viewBox="0 0 24 24">
+      <circle cx="9" cy="9" r="6" />
+      <path d="M9 6v6m6.5-2.8a6 6 0 1 1-6.3 6.3" />
     </symbol>
     <symbol id="icon-help" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="9" />

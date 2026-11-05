@@ -55,11 +55,11 @@ export function mountAuthScreen(container, { navigate, mode = 'login', message =
     switchButton.disabled = true
     status.textContent = registering ? 'Creating your account…' : 'Logging in…'
     try {
-      await auth.signIn(mode, { email: email.value.trim().toLowerCase(), password: password.value }, { signal: request.signal })
+      const user = await auth.signIn(mode, { email: email.value.trim().toLowerCase(), password: password.value }, { signal: request.signal })
       if (!active) return
       password.value = ''
       confirm.value = ''
-      onAuthenticated()
+      onAuthenticated(user)
       navigate('collections')
     } catch (failure) {
       if (active) { error.textContent = failure.message; error.hidden = false }

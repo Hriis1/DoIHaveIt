@@ -79,6 +79,38 @@ svg {
 
 .app-menu {
   position: relative;
+  flex-shrink: 0;
+}
+
+.app-header-actions,
+.credit-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-header-actions {
+  min-width: 0;
+}
+
+.credit-badge {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.credit-badge svg {
+  width: 16px;
+  height: 16px;
+}
+
+.credit-amount {
+  overflow-wrap: anywhere;
 }
 
 .app-menu > summary {

@@ -16,6 +16,7 @@ import { preparePhotoCache, discardCameraResult } from './modules/itemPhotos.js'
 const app = document.querySelector('#app')
 const container = document.querySelector('#screen-content')
 const appMenu = document.querySelector('.app-menu')
+const creditBadge = document.querySelector('.credit-badge')
 const isNative = Capacitor.isNativePlatform()
 let databaseReady = isNative ? initializeDatabase() : Promise.resolve()
 if (isNative) prepareCatalogCache().catch(error => console.warn('Catalog cache cleanup failed:', error))
@@ -34,6 +35,14 @@ const screens = { collections: mountCollectionsScreen, collection: mountCollecti
   register: (container, options) => mountAuthScreen(container, { ...options, mode: 'register' }) }
 let unmountScreen
 let canAccessApp = false
+
+function showCreditBalance(user) {
+  creditBadge.hidden = !user
+  if (!user) return
+  const amount = user.credits.toLocaleString()
+  creditBadge.querySelector('.credit-amount').textContent = amount
+  creditBadge.ariaLabel = `Credit balance: ${amount}`
+}
 
 // Dismiss the shared dropdown when leaving it or selecting an entry
 document.addEventListener('pointerdown', event => {
@@ -65,10 +74,14 @@ export function showScreen(name, parameters = {}) {
   if (unmountScreen) unmountScreen()
   appMenu.open = false
   appMenu.hidden = isAuth
+  if (isAuth) showCreditBalance(null)
   document.querySelector('.brand').disabled = isAuth
   app.dataset.screen = name
   unmountScreen = mountScreen(container, { ...parameters, isNative, databaseReady, navigate: showScreen,
-    onAuthenticated: () => { canAccessApp = true } })
+    onAuthenticated: user => {
+      canAccessApp = true
+      showCreditBalance(user)
+    } })
   window.scrollTo(0, 0)
 }
 
@@ -83,6 +96,7 @@ async function startSession() {
     await databaseReady
     const session = await auth.restoreSession()
     canAccessApp = session.state === 'authenticated' || session.state === 'offline'
+    showCreditBalance(session.user)
     showScreen(canAccessApp ? 'collections' : 'login', { message: session.message })
   } catch (error) {
     container.innerHTML = '<section class="auth-startup"><p class="error" role="alert"></p><button class="primary-button auth-retry" type="button">Try again</button><button class="secondary-button auth-login" type="button">Log in</button></section>'

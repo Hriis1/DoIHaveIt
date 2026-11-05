@@ -13,6 +13,7 @@ export function createAuth({ api = requestAuth, tokens = { getSessionToken, save
   }
 
   return {
+    getCurrentUser: getUser,
     async signIn(action, credentials, { signal } = {}) {
       const result = await api(action, { credentials, signal })
       signal?.throwIfAborted()

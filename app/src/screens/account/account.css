@@ -1,0 +1,35 @@
+.account-status {
+  color: var(--muted);
+}
+
+.account-summary {
+  margin: 22px 0 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.account-summary dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.account-summary dt:not(:first-child) {
+  margin-top: 18px;
+}
+
+.account-summary dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.account-balance {
+  font-size: 26px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.account-details > button {
+  width: 100%;
+}

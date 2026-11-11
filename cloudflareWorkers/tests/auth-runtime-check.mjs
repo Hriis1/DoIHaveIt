@@ -9,6 +9,8 @@ const bundle = await build({
   entryPoints: [fileURLToPath(new URL('../src/index.js', import.meta.url))],
   bundle: true, write: false, format: 'esm', platform: 'browser', external: ['node:*'],
 })
+let providerStatus = 200
+const product = { brand: 'Brand', name: 'Product', size: null }
 const runtime = new Miniflare(convertV4MiniflareOptions({
   name: 'auth-runtime-check',
   modules: true,
@@ -17,6 +19,12 @@ const runtime = new Miniflare(convertV4MiniflareOptions({
   compatibilityFlags: ['nodejs_compat'],
   d1Databases: { DB: 'auth-check' },
   ratelimits: { AUTH_RATE_LIMITER: { namespace_id: '428871001', simple: { limit: 10, period: 60 } } },
+  bindings: { GEMINI_API_KEY: 'local-test-key' },
+  outboundService: async request => {
+    assert.equal(new URL(request.url).hostname, 'generativelanguage.googleapis.com')
+    return Response.json({ candidates: [{ finishReason: 'STOP', content: { parts: [{ text: JSON.stringify({ product }) }] } }] },
+      { status: providerStatus })
+  },
 }))
 
 try {
@@ -44,11 +52,27 @@ try {
   assert.equal((await request('me', { token: first.token })).status, 200)
   assert.equal((await request('register', { body: credentials })).status, 409)
 
+  const lookup = () => runtime.dispatchFetch('https://example.com/products/lookup', {
+    method: 'POST', body: JSON.stringify({ barcode: '123' }),
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${first.token}` },
+  })
+  await database.prepare('UPDATE users SET credits = 10;').run()
+  const found = await lookup()
+  assert.equal(found.status, 200, await found.clone().text())
+  assert.deepEqual(await found.json(), { ...product, credits: 0 })
+  assert.equal((await lookup()).status, 402)
+  await database.prepare('UPDATE users SET credits = 10;').run()
+  providerStatus = 503
+  const refunded = await lookup()
+  assert.equal(refunded.status, 502, await refunded.clone().text())
+  assert.equal((await refunded.json()).credits, 10)
+  assert.equal((await database.prepare('SELECT credits FROM users').first()).credits, 10)
+
   await database.prepare("CREATE TRIGGER fail_session BEFORE INSERT ON sessions BEGIN SELECT RAISE(ABORT, 'test failure'); END;").run()
   const failed = await request('register', { body: { ...credentials, email: 'rollback@example.com' } })
   assert.equal(failed.status, 503)
   assert.equal((await database.prepare('SELECT COUNT(*) AS n FROM users').first()).n, 1)
-  console.log('Native auth runtime check passed: register, login, me, logout, multiple sessions, duplicate email, and D1 rollback.')
+  console.log('Native runtime check passed: auth, D1 rollback, authenticated lookup, atomic deduction, insufficient credits, and provider refund.')
 } finally {
   await runtime.dispose()
 }

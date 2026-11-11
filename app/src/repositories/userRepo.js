@@ -16,7 +16,12 @@ export function createUserRepository(access = withDatabaseAccess) {
     async deleteCurrentUser() {
       return access(database => database.run('DELETE FROM users;', [], false))
     },
+    async updateCurrentUserCredits(userId, credits) {
+      return access(database => database.run(
+        'UPDATE users SET credits = ? WHERE id = ?;', [credits, userId], false
+      ))
+    },
   }
 }
 
-export const { getCurrentUser, saveCurrentUser, deleteCurrentUser } = createUserRepository()
+export const { getCurrentUser, saveCurrentUser, deleteCurrentUser, updateCurrentUserCredits } = createUserRepository()

@@ -6,7 +6,10 @@ const getApiKey = mock.fn()
 const getAiProviderSettings = mock.fn()
 const lookupProduct = mock.fn()
 const getCurrentUser = mock.fn()
-mock.module('../src/modules/auth.js', { namedExports: { auth: { getCurrentUser } } })
+const updateCredits = mock.fn()
+const getSessionToken = mock.fn()
+mock.module('../src/modules/auth.js', { namedExports: { auth: { getCurrentUser, updateCredits } } })
+mock.module('../src/modules/sessionStorage.js', { namedExports: { getSessionToken } })
 mock.module('../src/modules/aiProviderSettings.js', { namedExports: { getAiProviderSettings } })
 mock.module('../src/modules/apiKeyStorage.js', { namedExports: { getApiKey } })
 mock.module('../src/modules/ai/directProductLookup.js', { namedExports: { lookupProduct } })
@@ -16,6 +19,10 @@ beforeEach(() => {
   settings = { useAppKey: true, provider: 'gemini' }
   getCurrentUser.mock.resetCalls()
   getCurrentUser.mock.mockImplementation(async () => ({ id: 1, credits: 10 }))
+  updateCredits.mock.resetCalls()
+  updateCredits.mock.mockImplementation(async () => {})
+  getSessionToken.mock.resetCalls()
+  getSessionToken.mock.mockImplementation(async () => 'a'.repeat(64))
   getAiProviderSettings.mock.mockImplementation(() => ({ ...settings }))
   getApiKey.mock.resetCalls()
   getApiKey.mock.mockImplementation(async () => null)
@@ -26,7 +33,7 @@ beforeEach(() => {
 const product = { brand: ' Марка ', name: ' МЛЯКО ', size: ' 500 ML ' }
 
 test('app credit lookups reject insufficient or missing cached balances before sending a request', async t => {
-  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(product))
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json({ ...product, credits: 0 }))
   for (const user of [null, { credits: 0 }, { credits: 9 }]) {
     getCurrentUser.mock.mockImplementation(async () => user)
     await assert.rejects(lookupProductWithAi('123'), error =>
@@ -66,15 +73,17 @@ test('AI client sends the barcode with the app key option and returns normalized
     assert.equal(url, 'https://doihaveit-api.hrishd.workers.dev/products/lookup')
     assert.equal(options.method, 'POST')
     assert.equal(options.headers['Content-Type'], 'application/json')
+    assert.equal(options.headers.Authorization, `Bearer ${'a'.repeat(64)}`)
     assert.equal(options.signal, controller.signal)
     assert.deepEqual(JSON.parse(options.body), { barcode: '004062139018352' })
-    return Response.json(product)
+    return Response.json({ ...product, credits: 0 })
   })
   assert.deepEqual(await lookupProductWithAi('004062139018352', { signal: controller.signal }), {
     brand: 'марка', name: 'мляко', size: '500 ml',
   })
   assert.equal(getApiKey.mock.callCount(), 0)
   assert.equal(lookupProduct.mock.callCount(), 0)
+  assert.deepEqual(updateCredits.mock.calls.at(-1).arguments, [1, 0])
 })
 
 test('AI client reads the current selection and sends only that provider’s own key on each search', async t => {
@@ -82,7 +91,7 @@ test('AI client reads the current selection and sends only that provider’s own
   const requests = []
   const fetch = t.mock.method(globalThis, 'fetch', async (url, options) => {
     requests.push(JSON.parse(options.body))
-    return Response.json(product)
+    return Response.json({ ...product, credits: 0 })
   })
   for (const provider of ['gemini', 'deepseek', 'openai']) {
     settings = { useAppKey: false, provider }
@@ -163,12 +172,39 @@ test('direct lookup forwards cancellation, preserves errors and reports an unide
 })
 
 test('AI client preserves null sizes and displays Worker error messages', async t => {
-  const mockFetch = t.mock.method(globalThis, 'fetch', async () => Response.json({ ...product, size: null }))
+  const mockFetch = t.mock.method(globalThis, 'fetch', async () => Response.json({ ...product, size: null, credits: 0 }))
   assert.equal((await lookupProductWithAi('123')).size, null)
   for (const [status, message] of [[404, 'Product not found'], [503, 'AI provider rate limit exceeded.'], [502, 'Provider failed']]) {
-    mockFetch.mock.mockImplementation(async () => Response.json({ error: message }, { status }))
+    mockFetch.mock.mockImplementation(async () => Response.json({ error: message, credits: 10 }, { status }))
     await assert.rejects(lookupProductWithAi('123'), { message })
+    assert.deepEqual(updateCredits.mock.calls.at(-1).arguments, [1, 10])
   }
+})
+
+test('server insufficient credits update the cache and expose Buy credits; missing sessions never send requests', async t => {
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json({
+    error: 'Not enough credits', code: 'INSUFFICIENT_CREDITS', credits: 0,
+  }, { status: 402 }))
+  await assert.rejects(lookupProductWithAi('123'), error => error.code === 'INSUFFICIENT_CREDITS')
+  assert.deepEqual(updateCredits.mock.calls.at(-1).arguments, [1, 0])
+  getSessionToken.mock.mockImplementation(async () => null)
+  await assert.rejects(lookupProductWithAi('123'), /log in again/)
+  assert.equal(fetch.mock.callCount(), 1)
+})
+
+test('cache-write failures are visible and cancellation during session reads prevents dispatch', async t => {
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json({ ...product, credits: 0 }))
+  updateCredits.mock.mockImplementation(async () => { throw new Error('disk full') })
+  await assert.rejects(lookupProductWithAi('123'), /Could not update your saved credit balance/)
+  let finish
+  getSessionToken.mock.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  const controller = new AbortController()
+  const pending = lookupProductWithAi('123', { signal: controller.signal })
+  await new Promise(resolve => setImmediate(resolve))
+  controller.abort()
+  finish('a'.repeat(64))
+  await assert.rejects(pending, { name: 'AbortError' })
+  assert.equal(fetch.mock.callCount(), 1)
 })
 
 test('AI client rejects malformed responses and incomplete product data', async t => {

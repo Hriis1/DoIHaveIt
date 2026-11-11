@@ -1,11 +1,12 @@
 import { Capacitor } from '@capacitor/core'
 import { requestAuth } from './authApi.js'
 import { getSessionToken, saveSessionToken, deleteSessionToken } from './sessionStorage.js'
-import { getCurrentUser, saveCurrentUser, deleteCurrentUser } from '../repositories/userRepo.js'
+import { getCurrentUser, saveCurrentUser, deleteCurrentUser, updateCurrentUserCredits } from '../repositories/userRepo.js'
 
 export function createAuth({ api = requestAuth, tokens = { getSessionToken, saveSessionToken, deleteSessionToken },
-  users = { getCurrentUser, saveCurrentUser, deleteCurrentUser }, isNative = Capacitor.isNativePlatform() } = {}) {
+  users = { getCurrentUser, saveCurrentUser, deleteCurrentUser, updateCurrentUserCredits }, isNative = Capacitor.isNativePlatform() } = {}) {
   let memoryUser = null
+  const creditListeners = new Set()
   const getUser = () => isNative ? users.getCurrentUser() : Promise.resolve(memoryUser)
   const saveUser = async user => {
     if (isNative) await users.saveCurrentUser(user)
@@ -14,6 +15,19 @@ export function createAuth({ api = requestAuth, tokens = { getSessionToken, save
 
   return {
     getCurrentUser: getUser,
+    subscribeCreditBalance(listener) {
+      creditListeners.add(listener)
+      return () => creditListeners.delete(listener)
+    },
+    async updateCredits(userId, credits) {
+      if (!Number.isSafeInteger(credits) || credits < 0) throw new Error('Invalid credit balance.')
+      const user = await getUser()
+      if (!user || user.id !== userId) return
+      const updated = { ...user, credits }
+      if (isNative) await users.updateCurrentUserCredits(userId, credits)
+      else memoryUser = updated
+      for (const listener of creditListeners) listener(updated)
+    },
     async signIn(action, credentials, { signal } = {}) {
       const result = await api(action, { credentials, signal })
       signal?.throwIfAborted()

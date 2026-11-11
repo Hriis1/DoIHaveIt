@@ -3,6 +3,7 @@ import { respond } from '../http.js'
 import { AuthError } from '../auth/errors.js'
 import { createSessionToken, hashPassword, hashSessionToken, verifyPassword } from '../auth/credentials.js'
 import { createAuthRepository } from '../repositories/authRepo.js'
+import { readSessionToken } from '../auth/session.js'
 
 const sessionDuration = 30 * 24 * 60 * 60 * 1000
 const sqlDate = date => date.toISOString().slice(0, 19).replace('T', ' ')
@@ -53,12 +54,6 @@ async function readCredentials(request) {
     throw new AuthError('Password must be 8–128 characters with no spaces or other whitespace.', 400)
   }
   return { email, password: body.password }
-}
-
-function readSessionToken(request) {
-  const match = request.headers.get('Authorization')?.match(/^Bearer ([a-f0-9]{64})$/i)
-  if (!match) throw new AuthError('A valid session token is required.', 401)
-  return match[1]
 }
 
 export async function handleAuth(request, env, action) {

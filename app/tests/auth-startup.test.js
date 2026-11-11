@@ -20,17 +20,18 @@ function mount(restoreSession) {
     return nodes.get(selector)
   }
   const mounts = []
+  let creditListener
   const screen = name => (_container, options) => { mounts.push({ name, options }); return () => {} }
   const context = {
     document: { querySelector: node, addEventListener() {} }, window: { scrollTo() {} },
-    Capacitor: { isNativePlatform: () => false }, auth: { restoreSession },
+    Capacitor: { isNativePlatform: () => false }, auth: { restoreSession, subscribeCreditBalance(listener) { creditListener = listener } },
     mountCollectionsScreen: screen('collections'), mountCollectionScreen: screen('collection'),
     mountCatalogsScreen: screen('catalogs'), mountProductsScreen: screen('products'),
     mountAiProviderScreen: screen('ai-provider'), mountAuthScreen: screen('auth'),
     mountAccountScreen: screen('account'),
   }
   runInNewContext(source + '\nthis.show = showScreen', context)
-  return { node, mounts, show: context.show }
+  return { node, mounts, show: context.show, updateCredits: user => creditListener(user) }
 }
 
 test('startup requires login without a session and gates the app shell until authentication succeeds', async () => {
@@ -49,9 +50,12 @@ test('startup requires login without a session and gates the app shell until aut
 
 test('authenticated and offline cached sessions open collections directly', async () => {
   for (const state of ['authenticated', 'offline']) {
-    const app = mount(async () => ({ state }))
+    const app = mount(async () => ({ state, user: { credits: 12 } }))
     await settle()
     assert.equal(app.mounts.at(-1).name, 'collections')
+    assert.equal(app.node('.credit-amount').textContent, '12')
+    app.updateCredits({ credits: 2 })
+    assert.equal(app.node('.credit-amount').textContent, '2')
   }
 })
 

@@ -3,6 +3,7 @@ import { getApiKey } from './apiKeyStorage.js'
 import { lookupProduct } from './ai/directProductLookup.js'
 import { auth } from './auth.js'
 import { lookUpProductGemini } from '../creditCosts.js'
+import { getSessionToken } from './sessionStorage.js'
 
 export async function lookupProductWithAi(barcode, { signal } = {}) {
   signal?.throwIfAborted()
@@ -43,11 +44,14 @@ export async function lookupProductWithAi(barcode, { signal } = {}) {
       error.code = 'INSUFFICIENT_CREDITS'
       throw error
     }
+    const token = await getSessionToken()
+    signal?.throwIfAborted()
+    if (!token) throw new Error('Please log in again to use app credits.')
     let response
     try {
       response = await fetch('https://doihaveit-api.hrishd.workers.dev/products/lookup', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ barcode }),
         signal,
       })
@@ -61,8 +65,22 @@ export async function lookupProductWithAi(barcode, { signal } = {}) {
     } catch {
       throw new Error('Could not read the AI search response. Please try again.')
     }
-    if (!response.ok) throw new Error(typeof product?.error === 'string' && product.error.trim()
-      ? product.error : 'AI search failed. Please try again.')
+    signal?.throwIfAborted()
+    if (Object.hasOwn(product ?? {}, 'credits')) {
+      try {
+        await auth.updateCredits(user.id, product.credits)
+      } catch {
+        throw new Error('Could not update your saved credit balance. Reopen the app to refresh it.')
+      }
+    } else if (response.ok) {
+      throw new Error('AI search returned invalid product data.')
+    }
+    if (!response.ok) {
+      const error = new Error(typeof product?.error === 'string' && product.error.trim()
+        ? product.error : 'AI search failed. Please try again.')
+      if (product?.code === 'INSUFFICIENT_CREDITS') error.code = 'INSUFFICIENT_CREDITS'
+      throw error
+    }
   }
   signal?.throwIfAborted()
 

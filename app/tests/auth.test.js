@@ -69,6 +69,7 @@ function fixture(api = async () => ({ user, token })) {
   const tokens = { getSessionToken: async () => savedToken, saveSessionToken: async value => { savedToken = value },
     deleteSessionToken: async () => { savedToken = null } }
   const users = { getCurrentUser: async () => cached, saveCurrentUser: async value => { cached = value },
+    updateCurrentUserCredits: async (id, credits) => { if (cached?.id === id) cached = { ...cached, credits } },
     deleteCurrentUser: async () => { cached = null } }
   return { auth: createAuth({ api, tokens, users, isNative: true }), tokens, users,
     get cached() { return cached }, get token() { return savedToken } }
@@ -103,6 +104,26 @@ test('expired sessions clear the wallet cache, while connection failures preserv
   assert.equal((await f.auth.restoreSession()).state, 'login')
   assert.equal(f.cached, null)
   assert.equal(f.token, null)
+})
+
+test('credit responses update only the matching cached wallet and notify the badge after saving', async () => {
+  const f = fixture()
+  await f.auth.signIn('login', credentials)
+  const updates = []
+  const unsubscribe = f.auth.subscribeCreditBalance(value => {
+    assert.equal(f.cached.credits, value.credits)
+    updates.push(value)
+  })
+  await f.auth.updateCredits(user.id, 2)
+  assert.deepEqual(f.cached, { ...user, credits: 2 })
+  assert.deepEqual(updates, [{ ...user, credits: 2 }])
+  await f.auth.updateCredits(user.id + 1, 100)
+  assert.equal(f.cached.credits, 2)
+  for (const invalid of [-1, '5', 1.5, null]) await assert.rejects(f.auth.updateCredits(user.id, invalid), /Invalid credit balance/)
+  f.users.updateCurrentUserCredits = async () => { throw new Error('disk full') }
+  await assert.rejects(f.auth.updateCredits(user.id, 0))
+  assert.equal(updates.length, 1)
+  unsubscribe()
 })
 
 test('cancelled sign-in never starts storage writes and failed wallet writes remove the new token', async () => {

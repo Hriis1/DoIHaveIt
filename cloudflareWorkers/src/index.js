@@ -4,7 +4,7 @@ import { handleProductLookup } from './routes/productLookup.js'
 import { handleAuth } from './routes/auth.js'
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url)
 
     //Auth routes
@@ -12,7 +12,7 @@ export default {
     if (auth) return handleAuth(request, env, auth[1])
 
     //Product look up route
-    if (url.pathname === '/products/lookup') return handleProductLookup(request, env)
+    if (url.pathname === '/products/lookup') return handleProductLookup(request, env, ctx)
 
     //Catalog download route
     const match = url.pathname.match(/^\/catalogs\/([^/]+)$/)

@@ -44,6 +44,8 @@ function showCreditBalance(user) {
   creditBadge.ariaLabel = `Credit balance: ${amount}`
 }
 
+auth.subscribeCreditBalance(showCreditBalance)
+
 // Dismiss the shared dropdown when leaving it or selecting an entry
 document.addEventListener('pointerdown', event => {
   if (!appMenu.contains(event.target)) appMenu.open = false

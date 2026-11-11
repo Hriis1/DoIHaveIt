@@ -5,6 +5,8 @@ let settings
 const getApiKey = mock.fn()
 const getAiProviderSettings = mock.fn()
 const lookupProduct = mock.fn()
+const getCurrentUser = mock.fn()
+mock.module('../src/modules/auth.js', { namedExports: { auth: { getCurrentUser } } })
 mock.module('../src/modules/aiProviderSettings.js', { namedExports: { getAiProviderSettings } })
 mock.module('../src/modules/apiKeyStorage.js', { namedExports: { getApiKey } })
 mock.module('../src/modules/ai/directProductLookup.js', { namedExports: { lookupProduct } })
@@ -12,6 +14,8 @@ const { lookupProductWithAi } = await import('../src/modules/aiProductLookup.js'
 
 beforeEach(() => {
   settings = { useAppKey: true, provider: 'gemini' }
+  getCurrentUser.mock.resetCalls()
+  getCurrentUser.mock.mockImplementation(async () => ({ id: 1, credits: 10 }))
   getAiProviderSettings.mock.mockImplementation(() => ({ ...settings }))
   getApiKey.mock.resetCalls()
   getApiKey.mock.mockImplementation(async () => null)
@@ -20,6 +24,40 @@ beforeEach(() => {
 })
 
 const product = { brand: ' Марка ', name: ' МЛЯКО ', size: ' 500 ML ' }
+
+test('app credit lookups reject insufficient or missing cached balances before sending a request', async t => {
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(product))
+  for (const user of [null, { credits: 0 }, { credits: 9 }]) {
+    getCurrentUser.mock.mockImplementation(async () => user)
+    await assert.rejects(lookupProductWithAi('123'), error =>
+      error.message === 'Not enough credits' && error.code === 'INSUFFICIENT_CREDITS')
+  }
+  assert.equal(fetch.mock.callCount(), 0)
+  for (const credits of [10, 11]) {
+    getCurrentUser.mock.mockImplementation(async () => ({ credits }))
+    await lookupProductWithAi('123')
+  }
+  assert.equal(fetch.mock.callCount(), 2)
+})
+
+test('own keys bypass credit checks; cache failures and cancellation prevent app credit requests', async t => {
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json(product))
+  getCurrentUser.mock.mockImplementation(async () => { throw new Error('Private storage details') })
+  await assert.rejects(lookupProductWithAi('123'), /Could not read your credit balance/)
+  settings.useAppKey = false
+  getApiKey.mock.mockImplementation(async () => 'test-key')
+  await lookupProductWithAi('123')
+  assert.equal(getCurrentUser.mock.callCount(), 1)
+  settings.useAppKey = true
+  let finish
+  getCurrentUser.mock.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  const controller = new AbortController()
+  const pending = lookupProductWithAi('123', { signal: controller.signal })
+  controller.abort()
+  finish({ credits: 10 })
+  await assert.rejects(pending, { name: 'AbortError' })
+  assert.equal(fetch.mock.callCount(), 0)
+})
 
 test('AI client sends the barcode with the app key option and returns normalized product fields', async t => {
   const controller = new AbortController()

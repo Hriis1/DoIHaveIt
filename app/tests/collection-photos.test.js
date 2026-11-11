@@ -122,6 +122,32 @@ test('Add shows Photo required until a selected photo is ready', async () => {
   ui.unmount()
 })
 
+test('insufficient credits show a placeholder Buy credits link and clear it on retry and a new scan', async () => {
+  const ui = popup({ product: null })
+  await ui.scan()
+  const error = new Error('Not enough credits')
+  error.code = 'INSUFFICIENT_CREDITS'
+  ui.ai(async () => { throw error })
+  ui.node('.scan-result-ai-search').emit()
+  await settle()
+  assert.equal(ui.node('.scan-result-error').textContent, 'Not enough credits')
+  assert.equal(ui.node('.scan-result-buy-credits').hidden, false)
+  assert.equal(ui.resolved.length, 0)
+  ui.node('.scan-result-buy-credits').emit()
+  assert.equal(ui.node('.scan-result-dialog').open, true)
+  ui.ai(async () => { throw new Error('Network error') })
+  ui.node('.scan-result-ai-search').emit()
+  await settle()
+  assert.equal(ui.node('.scan-result-buy-credits').hidden, true)
+  ui.ai(async () => { throw error })
+  ui.node('.scan-result-ai-search').emit()
+  await settle()
+  assert.equal(ui.node('.scan-result-buy-credits').hidden, false)
+  await ui.scan('456')
+  assert.equal(ui.node('.scan-result-buy-credits').hidden, true)
+  ui.unmount()
+})
+
 test('replacement deletes the discarded draft, picker cancellation retains it, and popup cancellation deletes it', async () => {
   const ui = popup()
   await ui.scan()

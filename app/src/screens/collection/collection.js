@@ -31,6 +31,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const scanResultTitle = screen.querySelector('#scan-result-title')
   const scanResultBarcode = screen.querySelector('#scan-result-barcode')
   const scanResultError = screen.querySelector('.scan-result-error')
+  const buyCredits = screen.querySelector('.scan-result-buy-credits')
   const scanResultProduct = screen.querySelector('.scan-result-product')
   const scanProductBrand = screen.querySelector('.scan-product-brand')
   const scanProductName = screen.querySelector('.scan-product-name')
@@ -77,6 +78,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   listen(photoGallery, 'click', () => void choosePhoto('gallery'))
   listen(scanResultAdd, 'click', () => void addScannedProduct())
   listen(scanResultAiSearch, 'click', () => void searchWithAi())
+  listen(buyCredits, 'click', event => event.preventDefault())
 
   function discardDraft() {
     if (!draft) return
@@ -130,6 +132,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     session.searching = true
     updatePhotoControls(session)
     scanResultError.hidden = true
+    buyCredits.hidden = true
     scanResultTitle.textContent = 'Searching for product…'
     try {
       const product = await lookupProductWithAi(session.barcode, { signal: session.lookupController.signal })
@@ -143,6 +146,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
       scanResultTitle.textContent = 'Unrecognized product'
       scanResultError.textContent = error.message || 'Could not search for the product. Please try again.'
       scanResultError.hidden = false
+      buyCredits.hidden = error.code !== 'INSUFFICIENT_CREDITS'
     } finally {
       session.searching = false
       updatePhotoControls(session)
@@ -227,6 +231,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     photoPreview.setAttribute('aria-label', 'No photo selected')
     showPhotoError('')
     scanResultError.hidden = true
+    buyCredits.hidden = true
     updatePhotoControls(session)
     scanResultProduct.hidden = true
     scanResultAdd.hidden = true

@@ -1,6 +1,8 @@
 import { getAiProviderSettings } from './aiProviderSettings.js'
 import { getApiKey } from './apiKeyStorage.js'
 import { lookupProduct } from './ai/directProductLookup.js'
+import { auth } from './auth.js'
+import { lookUpProductGemini } from '../creditCosts.js'
 
 export async function lookupProductWithAi(barcode, { signal } = {}) {
   signal?.throwIfAborted()
@@ -28,6 +30,19 @@ export async function lookupProductWithAi(barcode, { signal } = {}) {
     })
     if (product === null) throw new Error('Product not found')
   } else {
+    let user
+    try {
+      user = await auth.getCurrentUser()
+    } catch {
+      signal?.throwIfAborted()
+      throw new Error('Could not read your credit balance. Please try again.')
+    }
+    signal?.throwIfAborted()
+    if ((user?.credits ?? 0) < lookUpProductGemini) {
+      const error = new Error('Not enough credits')
+      error.code = 'INSUFFICIENT_CREDITS'
+      throw error
+    }
     let response
     try {
       response = await fetch('https://doihaveit-api.hrishd.workers.dev/products/lookup', {

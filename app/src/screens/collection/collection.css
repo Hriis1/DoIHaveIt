@@ -339,3 +339,9 @@
     margin: 4px 0 10px;
   }
 }
+.collection-screen .scan-result-buy-credits {
+  display: inline-block;
+  padding: 10px 0;
+  color: var(--accent);
+  text-decoration: underline;
+}

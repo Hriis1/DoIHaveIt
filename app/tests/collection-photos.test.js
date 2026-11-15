@@ -24,7 +24,9 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
         addEventListener: (event, handler) => listeners.set(event, handler),
         emit: (event = 'click') => listeners.get(event)?.({ preventDefault() {} }),
         setAttribute() {},
-        replaceChildren(...children) { this.children = children },
+        replaceChildren(...children) {
+          this.children = children.length === 1 && children[0].isFragment ? children[0].children : children
+        },
         querySelector: child => node(`${selector} ${child}`),
         showModal() { this.open = true },
         close() { this.open = false; this.emit('close') },
@@ -51,7 +53,8 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
   let save = async (photo, insert) => { await insert('item-photos/saved.jpg'); deleted.push(photo) }
   const context = {
     html: '', AbortController, console: { error() {} },
-    document: { createElement: () => ({}) },
+    document: { createElement: () => ({}), createDocumentFragment: () => ({ isFragment: true, children: [],
+      appendChild(child) { this.children.push(child) } }) },
     getProductByBarcode: async () => product,
     getProductBrands: () => brands(),
     getProductNames: brand => names(brand),
@@ -86,6 +89,18 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
     result: (value, owned = false) => { product = value; inCollection = owned },
   }
 }
+
+test('large product option lists do not exceed the JavaScript argument limit', async () => {
+  const ui = popup({ product: null })
+  const values = Array.from({ length: 200000 }, (_, index) => `brand ${index}`)
+  ui.options({ brands: async () => values })
+  await ui.scan()
+  ui.node('.scan-result-manual').emit()
+  await settle()
+  assert.equal(ui.node('#scan-brand-options').children.length, values.length)
+  assert.equal(ui.node('#scan-brand-options').children.at(-1).value, values.at(-1))
+  assert.equal(ui.node('.scan-result-error').hidden, true)
+})
 
 test('manual dropdowns refresh by trimmed brand and name without clearing entered values', async () => {
   const ui = popup({ product: null })

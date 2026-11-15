@@ -141,11 +141,14 @@ export function mountCollectionScreen(container, { collection, isNative, databas
       if (!isCurrent()) return
       const values = await getOptions()
       if (!isCurrent()) return
-      list.replaceChildren(...values.map(value => {
+      // Avoid passing large catalogs as thousands of arguments to one call.
+      const options = document.createDocumentFragment()
+      for (const value of values) {
         const option = document.createElement('option')
         option.value = value
-        return option
-      }))
+        options.appendChild(option)
+      }
+      list.replaceChildren(options)
     } catch (error) {
       if (!isCurrent()) return
       console.error('Could not load product options:', error)

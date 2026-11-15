@@ -36,26 +36,29 @@ async function findMatchingProduct(database, product) {
 export function createProductRepository(access = withDatabaseAccess) {
   const repository = {
     getProductByBarcode: barcode => access(database => findProductByBarcode(database, barcode)),
-    getProductBrands: () => access(async database => {
+    getProductBrands: (search, limit) => access(async database => {
       const { values } = await database.query(`
         SELECT DISTINCT lower(trim(brand)) AS value FROM products
-        WHERE trim(brand) <> '' ORDER BY value COLLATE NOCASE LIMIT 100;
-      `)
+        WHERE trim(brand) <> '' AND instr(lower(trim(brand)), ?) > 0
+        ORDER BY value COLLATE NOCASE LIMIT ?;
+      `, [search.trim().toLowerCase(), limit])
       return (values ?? []).map(row => row.value)
     }),
-    getProductNames: brand => access(async database => {
+    getProductNames: (brand, search, limit) => access(async database => {
       const { values } = await database.query(`
         SELECT DISTINCT lower(trim(name)) AS value FROM products
-        WHERE lower(trim(brand)) = ? AND trim(name) <> '' ORDER BY value COLLATE NOCASE LIMIT 100;
-      `, [brand.trim().toLowerCase()])
+        WHERE lower(trim(brand)) = ? AND trim(name) <> '' AND instr(lower(trim(name)), ?) > 0
+        ORDER BY value COLLATE NOCASE LIMIT ?;
+      `, [brand.trim().toLowerCase(), search.trim().toLowerCase(), limit])
       return (values ?? []).map(row => row.value)
     }),
-    getProductSizes: (brand, name) => access(async database => {
+    getProductSizes: (brand, name, search, limit) => access(async database => {
       const { values } = await database.query(`
         SELECT DISTINCT lower(trim(size)) AS value FROM products
         WHERE lower(trim(brand)) = ? AND lower(trim(name)) = ?
-          AND size IS NOT NULL AND trim(size) <> '' ORDER BY value COLLATE NOCASE LIMIT 100;
-      `, [brand.trim().toLowerCase(), name.trim().toLowerCase()])
+          AND size IS NOT NULL AND trim(size) <> '' AND instr(lower(trim(size)), ?) > 0
+        ORDER BY value COLLATE NOCASE LIMIT ?;
+      `, [brand.trim().toLowerCase(), name.trim().toLowerCase(), search.trim().toLowerCase(), limit])
       return (values ?? []).map(row => row.value)
     }),
     resolveProduct: async (barcode, product, { signal } = {}) => {

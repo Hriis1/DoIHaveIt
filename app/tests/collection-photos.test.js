@@ -63,9 +63,9 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
     document: { createElement: tag => node(`created-${tag}-${created++}`), createDocumentFragment: () => ({ isFragment: true, children: [],
       appendChild(child) { this.children.push(child) } }) },
     getProductByBarcode: async () => product,
-    getProductBrands: () => brands(),
-    getProductNames: brand => names(brand),
-    getProductSizes: (brand, name) => sizes(brand, name),
+    getProductBrands: (...args) => brands(...args),
+    getProductNames: (...args) => names(...args),
+    getProductSizes: (...args) => sizes(...args),
     isProductInCollection: async (...args) => { memberships.push(args); return inCollection },
     lookupProductWithAi: (...args) => lookup(...args),
     resolveAiProduct: (...args) => resolveProduct(...args),
@@ -176,6 +176,40 @@ test('opening each dropdown uses current trimmed dependencies and preserves othe
   await settle()
   assert.equal(ui.node('#scan-size-options').children[0].textContent, 'No saved options')
   assert.equal(ui.node('#scan-size-input').value, 'Custom size ')
+})
+
+test('each dropdown passes its own trimmed text and the 100-result limit to its repository query', async () => {
+  const ui = popup({ product: null })
+  const requested = []
+  ui.options({
+    brands: async (...args) => { requested.push(['brands', ...args]); return ['monster energy'] },
+    names: async (...args) => { requested.push(['names', ...args]); return ['zero ultra'] },
+    sizes: async (...args) => { requested.push(['sizes', ...args]); return ['500 ml'] },
+  })
+  await ui.scan()
+  ui.node('.scan-result-manual').emit()
+  ui.node('#scan-brand-input').value = ' Monster Ener  '
+  ui.node('#scan-brand-input').emit('input')
+  await settle()
+  assert.deepEqual(requested, [])
+  ui.node('#scan-brand-toggle').emit()
+  await settle()
+  ui.node('#scan-brand-input').value = ' Monster Energy  '
+  ui.node('#scan-brand-input').emit('input')
+  ui.node('#scan-name-input').value = ' UL '
+  ui.node('#scan-name-toggle').emit()
+  await settle()
+  ui.node('#scan-name-input').value = ' Zero Ultra '
+  ui.node('#scan-name-input').emit('input')
+  ui.node('#scan-size-input').value = ' ML  '
+  ui.node('#scan-size-toggle').emit()
+  await settle()
+  assert.deepEqual(requested, [
+    ['brands', 'monster ener', 100],
+    ['names', 'monster energy', 'ul', 100],
+    ['sizes', 'monster energy', 'zero ultra', 'ml', 100],
+  ])
+  assert.equal(ui.node('#scan-size-input').value, ' ML  ')
 })
 
 test('outdated dropdown results cannot replace newer options or update a closed popup', async () => {

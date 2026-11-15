@@ -50,11 +50,11 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const sizeOptions = screen.querySelector('#scan-size-options')
   const manualSelects = [
     { input: brandInput, list: brandOptions, toggle: screen.querySelector('#scan-brand-toggle'), field: screen.querySelector('.scan-brand-select'),
-      getOptions: () => getProductBrands() },
+      getOptions: brand => getProductBrands(brand, 100) },
     { input: nameInput, list: nameOptions, toggle: screen.querySelector('#scan-name-toggle'), field: screen.querySelector('.scan-name-select'),
-      getOptions: brand => brand ? getProductNames(brand) : [] },
+      getOptions: (brand, name) => brand ? getProductNames(brand, name, 100) : [] },
     { input: sizeInput, list: sizeOptions, toggle: screen.querySelector('#scan-size-toggle'), field: screen.querySelector('.scan-size-select'),
-      getOptions: (brand, name) => brand && name ? getProductSizes(brand, name) : [] },
+      getOptions: (brand, name, size) => brand && name ? getProductSizes(brand, name, size, 100) : [] },
   ]
   let openSelect
   let optionRequest = 0
@@ -205,6 +205,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     const request = optionRequest
     const brand = brandInput.value.trim().toLowerCase()
     const name = nameInput.value.trim().toLowerCase()
+    const size = sizeInput.value.trim().toLowerCase()
     select.list.hidden = false
     select.toggle.setAttribute('aria-expanded', 'true')
     showOptionsStatus(select.list, 'Loading…')
@@ -212,7 +213,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     try {
       await databaseReady
       if (!isCurrent()) return
-      const values = await select.getOptions(brand, name)
+      const values = await select.getOptions(brand, name, size)
       if (!isCurrent()) return
       if (!values.length) {
         showOptionsStatus(select.list, 'No saved options')

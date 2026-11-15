@@ -263,6 +263,10 @@
   font-size: 14px;
 }
 
+.collection-screen .scan-product-details > div:has(input:not([hidden])) {
+  align-items: baseline;
+}
+
 .collection-screen .scan-product-details dt {
   color: var(--muted);
 }

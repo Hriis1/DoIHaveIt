@@ -39,14 +39,14 @@ export function createProductRepository(access = withDatabaseAccess) {
     getProductBrands: () => access(async database => {
       const { values } = await database.query(`
         SELECT DISTINCT lower(trim(brand)) AS value FROM products
-        WHERE trim(brand) <> '' ORDER BY value COLLATE NOCASE;
+        WHERE trim(brand) <> '' ORDER BY value COLLATE NOCASE LIMIT 100;
       `)
       return (values ?? []).map(row => row.value)
     }),
     getProductNames: brand => access(async database => {
       const { values } = await database.query(`
         SELECT DISTINCT lower(trim(name)) AS value FROM products
-        WHERE lower(trim(brand)) = ? AND trim(name) <> '' ORDER BY value COLLATE NOCASE;
+        WHERE lower(trim(brand)) = ? AND trim(name) <> '' ORDER BY value COLLATE NOCASE LIMIT 100;
       `, [brand.trim().toLowerCase()])
       return (values ?? []).map(row => row.value)
     }),
@@ -54,7 +54,7 @@ export function createProductRepository(access = withDatabaseAccess) {
       const { values } = await database.query(`
         SELECT DISTINCT lower(trim(size)) AS value FROM products
         WHERE lower(trim(brand)) = ? AND lower(trim(name)) = ?
-          AND size IS NOT NULL AND trim(size) <> '' ORDER BY value COLLATE NOCASE;
+          AND size IS NOT NULL AND trim(size) <> '' ORDER BY value COLLATE NOCASE LIMIT 100;
       `, [brand.trim().toLowerCase(), name.trim().toLowerCase()])
       return (values ?? []).map(row => row.value)
     }),

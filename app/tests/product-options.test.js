@@ -34,3 +34,26 @@ test('adding a trimmed product reuses existing padded values and preserves their
   assert.equal((await repository.getProductByBarcode('manual-code')).id, result.id)
   assert.equal(database.prepare('SELECT COUNT(*) AS n FROM products').get().n, 1)
 })
+
+test('each product option query returns at most 100 sorted distinct values', async t => {
+  const { database, adapter } = fixture(t)
+  const repository = createProductRepository(operation => operation(adapter))
+  const insert = database.prepare('INSERT INTO products (brand, name, size) VALUES (?, ?, ?)')
+  for (let index = 119; index >= 0; index--) {
+    const value = String(index).padStart(3, '0')
+    insert.run(`brand ${value}`, 'name', null)
+    insert.run('brand 000', `name ${value}`, null)
+    insert.run('brand 000', 'name 000', `size ${value} `)
+    insert.run('brand 000', 'name 000', `size ${value}`)
+  }
+  const brands = await repository.getProductBrands()
+  const names = await repository.getProductNames('brand 000')
+  const sizes = await repository.getProductSizes('brand 000', 'name 000')
+  for (const values of [brands, names, sizes]) assert.equal(values.length, 100)
+  assert.equal(brands[0], 'brand 000')
+  assert.equal(brands.at(-1), 'brand 099')
+  assert.equal(names[0], 'name')
+  assert.equal(names.at(-1), 'name 098')
+  assert.equal(sizes[0], 'size 000')
+  assert.equal(sizes.at(-1), 'size 099')
+})

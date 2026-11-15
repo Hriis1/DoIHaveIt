@@ -53,6 +53,7 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
     isProductInCollection: async (...args) => { memberships.push(args); return inCollection },
     lookupProductWithAi: (...args) => lookup(...args),
     resolveAiProduct: (...args) => resolveProduct(...args),
+    resolveProduct: (...args) => resolveProduct(...args),
     createScanner: options => { scan = options.onScan; return { destroy() {} } },
     getCollectionItems: async () => ({ items: [], total: inserted.length, page: 1, totalPages: 1 }),
     addCollectionItem: async (...args) => { inserted.push(args) },
@@ -99,6 +100,142 @@ test('scan results show only their matching bottom action and reset it on the ne
   assert.equal(ui.node('.scan-result-ai-search').hidden, true)
   assert.equal(ui.node('.scan-result-add').hidden, false)
   ui.unmount()
+})
+
+test('manual entry requires brand, name and photo before any product writes', async () => {
+  const ui = popup({ product: null })
+  await ui.scan()
+  assert.equal(ui.node('.scan-result-manual').hidden, false)
+  ui.node('.scan-result-manual').emit()
+  assert.equal(ui.node('#scan-result-title').textContent, 'Add product manually')
+  assert.equal(ui.node('.scan-result-actions').hidden, true)
+  assert.equal(ui.node('#scan-brand-input').hidden, false)
+  assert.equal(ui.node('.scan-product-size-row').hidden, false)
+  ui.node('#scan-brand-input').value = '   '
+  ui.node('.scan-result-add').emit()
+  assert.equal(ui.node('.scan-brand-error').hidden, false)
+  assert.equal(ui.node('.scan-name-error').hidden, false)
+  assert.equal(ui.node('.scan-photo-error').textContent, 'Photo required')
+  assert.equal(ui.resolved.length, 0)
+  ui.select(async () => ({ path: 'manual.jpg', webPath: 'preview' }))
+  ui.node('.scan-photo-gallery').emit()
+  await settle()
+  ui.node('.scan-result-add').emit()
+  assert.equal(ui.resolved.length, 0)
+  ui.node('#scan-brand-input').value = ' Brand '
+  ui.node('#scan-name-input').value = ' Product '
+  ui.node('.scan-result-add').emit()
+  await settle()
+  assert.deepEqual(ui.resolved, [{ barcode: '123', brand: 'brand', name: 'product', size: null }])
+  assert.deepEqual(ui.inserted, [[3, 9, 'item-photos/saved.jpg']])
+  assert.equal(ui.node('.scan-result-dialog').open, false)
+})
+
+test('manual entry links the barcode to an existing product and adds its photo to the collection', async () => {
+  const ui = popup({ product: null })
+  await ui.scan('new-barcode')
+  ui.node('.scan-result-manual').emit()
+  ui.node('#scan-brand-input').value = ' BRAND '
+  ui.node('#scan-name-input').value = ' Name '
+  ui.node('#scan-size-input').value = ' 330 ML '
+  ui.resolve(async (barcode, product) => {
+    assert.equal(barcode, 'new-barcode')
+    assert.equal(JSON.stringify(product), JSON.stringify({ brand: 'brand', name: 'name', size: '330 ml' }))
+    return { id: 22, ...product }
+  })
+  ui.select(async () => ({ path: 'manual.jpg', webPath: 'preview' }))
+  ui.node('.scan-photo-camera').emit()
+  await settle()
+  ui.node('.scan-result-add').emit()
+  ui.node('.scan-result-add').emit()
+  await settle()
+  assert.deepEqual(ui.inserted, [[3, 22, 'item-photos/saved.jpg']])
+  assert.equal(ui.deleted.length, 1)
+})
+
+test('manual matches already in the collection still link the barcode and discard the unused photo', async () => {
+  const ui = popup({ product: null, inCollection: true })
+  await ui.scan('new-code')
+  ui.node('.scan-result-manual').emit()
+  ui.node('#scan-brand-input').value = 'brand'
+  ui.node('#scan-name-input').value = 'product'
+  const photo = { path: 'unused.jpg', webPath: 'preview' }
+  ui.select(async () => photo)
+  ui.node('.scan-photo-gallery').emit()
+  await settle()
+  ui.node('.scan-result-add').emit()
+  await settle()
+  assert.equal(ui.resolved[0].barcode, 'new-code')
+  assert.equal(ui.node('#scan-result-title').textContent, 'product already in collection')
+  assert.equal(ui.node('.scan-result-dismiss').hidden, false)
+  assert.deepEqual(ui.inserted, [])
+  assert.deepEqual(ui.deleted, [photo])
+  ui.node('.scan-result-dismiss').emit()
+  assert.equal(ui.deleted.length, 1)
+})
+
+test('cancelling manual entry deletes the photo without creating or linking a product', async () => {
+  const ui = popup({ product: null })
+  await ui.scan()
+  ui.node('.scan-result-manual').emit()
+  const photo = { path: 'cancelled.jpg', webPath: 'preview' }
+  ui.select(async () => photo)
+  ui.node('.scan-photo-gallery').emit()
+  await settle()
+  ui.node('.scan-result-close').emit()
+  await settle()
+  assert.deepEqual(ui.deleted, [photo])
+  assert.deepEqual(ui.resolved, [])
+  assert.deepEqual(ui.inserted, [])
+})
+
+test('manual entry is blocked during AI lookup and resets on the next scan', async () => {
+  const ui = popup({ product: null })
+  await ui.scan()
+  const lookup = deferred()
+  ui.ai(() => lookup.promise)
+  ui.node('.scan-result-ai-search').emit()
+  assert.equal(ui.node('.scan-result-manual').disabled, true)
+  ui.node('.scan-result-manual').emit()
+  assert.equal(ui.node('#scan-brand-input').hidden, true)
+  lookup.reject(new Error('No product'))
+  await settle()
+  ui.node('.scan-result-manual').emit()
+  assert.equal(ui.node('#scan-brand-input').hidden, false)
+  await ui.scan('next')
+  assert.equal(ui.node('#scan-brand-input').hidden, true)
+  assert.equal(ui.node('.scan-result-manual').hidden, false)
+})
+
+test('manual database failures retain inputs and photo for retry, and leaving during resolution prevents collection insertion', async () => {
+  const ui = popup({ product: null })
+  await ui.scan()
+  ui.node('.scan-result-manual').emit()
+  ui.node('#scan-brand-input').value = 'brand'
+  ui.node('#scan-name-input').value = 'name'
+  const photo = { path: 'retry.jpg', webPath: 'preview' }
+  ui.select(async () => photo)
+  ui.node('.scan-photo-gallery').emit()
+  await settle()
+  ui.resolve(async () => { throw new Error('Database unavailable') })
+  ui.node('.scan-result-add').emit()
+  await settle()
+  assert.equal(ui.node('.scan-photo-error').textContent, 'Database unavailable')
+  assert.equal(ui.node('#scan-name-input').hidden, false)
+  assert.equal(ui.node('#scan-name-input').value, 'name')
+  assert.equal(ui.node('.scan-result-add').disabled, false)
+  assert.deepEqual(ui.deleted, [])
+  const pending = deferred()
+  let signal
+  ui.resolve((_barcode, _product, options) => { signal = options.signal; return pending.promise })
+  ui.node('.scan-result-add').emit()
+  await settle()
+  ui.unmount()
+  assert.equal(signal.aborted, true)
+  pending.resolve({ id: 9, brand: 'brand', name: 'name', size: null })
+  await settle()
+  assert.deepEqual(ui.inserted, [])
+  assert.deepEqual(ui.deleted, [photo])
 })
 
 test('Add shows Photo required until a selected photo is ready', async () => {

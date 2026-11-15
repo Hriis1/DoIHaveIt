@@ -34,13 +34,13 @@ async function findMatchingProduct(database, product) {
 
 // Accept the connection scheduler so product queries can be tested with real SQLite
 export function createProductRepository(access = withDatabaseAccess) {
-  return {
+  const repository = {
     getProductByBarcode: barcode => access(database => findProductByBarcode(database, barcode)),
-    resolveAiProduct: async (barcode, product, { signal } = {}) => {
+    resolveProduct: async (barcode, product, { signal } = {}) => {
       const isText = value => typeof value === 'string' && value.trim().length > 0
       if (!isText(barcode) || !product || !isText(product.brand) || !isText(product.name)
           || !(product.size === null || isText(product.size))) {
-        throw new Error('AI search returned invalid product data.')
+        throw new Error('Invalid product data.')
       }
       barcode = barcode.trim()
       const normalized = {
@@ -51,7 +51,7 @@ export function createProductRepository(access = withDatabaseAccess) {
         signal?.throwIfAborted()
         await database.beginTransaction()
         try {
-          // Preserve a barcode linked while AI search was in progress, including UPC/EAN equivalents
+          // Preserve existing barcode links, including UPC/EAN equivalents
           let resolved = await findProductByBarcode(database, barcode)
           resolved ??= await findMatchingProduct(database, normalized)
           signal?.throwIfAborted()
@@ -113,6 +113,7 @@ export function createProductRepository(access = withDatabaseAccess) {
       return { products, total, page: currentPage, totalPages }
     }),
   }
+  return { ...repository, resolveAiProduct: repository.resolveProduct }
 }
 
-export const { getProducts, getProductByBarcode, isProductInCollection, resolveAiProduct } = createProductRepository()
+export const { getProducts, getProductByBarcode, isProductInCollection, resolveProduct, resolveAiProduct } = createProductRepository()

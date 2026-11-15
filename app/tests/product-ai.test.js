@@ -12,6 +12,21 @@ function productFixture(t) {
   return { database, adapter, snapshot, repository, add }
 }
 
+test('manual resolution reuses a matching product, links its barcode, and creates lowercase products without a catalog', async t => {
+  const { database, repository, add } = productFixture(t)
+  const id = add('Brand', 'Product', '500 ML')
+  const matched = await repository.resolveProduct('manual-existing', aiProduct)
+  assert.equal(matched.id, id)
+  assert.equal((await repository.getProductByBarcode('manual-existing')).id, id)
+  const created = await repository.resolveProduct('manual-new', { brand: ' New ', name: ' Product ', size: null })
+  assert.equal(created.brand, 'new')
+  assert.equal(created.name, 'product')
+  assert.equal(created.size, null)
+  assert.equal(database.prepare('SELECT catalog_id FROM products WHERE id = ?').get(created.id).catalog_id, null)
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM products').get().n, 2)
+  assert.equal(database.prepare('SELECT COUNT(*) AS n FROM items').get().n, 0)
+})
+
 test('AI products are lowercased, stored without a catalog and linked to the scanned barcode', async t => {
   const { database, repository } = productFixture(t)
   const result = await repository.resolveAiProduct('004062139018352', aiProduct)

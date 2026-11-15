@@ -39,9 +39,9 @@
       <a class="scan-result-buy-credits" href="#" hidden>Buy credits</a>
       <div class="scan-result-product" hidden>
         <dl class="scan-product-details">
-          <div><dt>Brand</dt><dd class="scan-product-brand"></dd></div>
-          <div><dt>Name</dt><dd class="scan-product-name"></dd></div>
-          <div class="scan-product-size-row"><dt>Size</dt><dd class="scan-product-size"></dd></div>
+          <div><dt><label for="scan-brand-input">Brand</label></dt><dd><span class="scan-product-brand"></span><input id="scan-brand-input" type="text" autocomplete="off" required aria-describedby="scan-brand-error" hidden /><p class="error scan-brand-error" id="scan-brand-error" role="alert" hidden></p></dd></div>
+          <div><dt><label for="scan-name-input">Name</label></dt><dd><span class="scan-product-name"></span><input id="scan-name-input" type="text" autocomplete="off" required aria-describedby="scan-name-error" hidden /><p class="error scan-name-error" id="scan-name-error" role="alert" hidden></p></dd></div>
+          <div class="scan-product-size-row"><dt><label for="scan-size-input">Size</label></dt><dd><span class="scan-product-size"></span><input id="scan-size-input" type="text" placeholder="Optional" autocomplete="off" hidden /></dd></div>
           <div class="scan-product-photo-row">
             <dt>Photo</dt>
             <dd class="scan-photo-controls">
@@ -57,7 +57,10 @@
       </div>
       <button class="primary-button scan-result-add" type="button" hidden>Add to collection</button>
       <button class="primary-button scan-result-dismiss" type="button" hidden>Close</button>
-      <button class="primary-button scan-result-ai-search" type="button" hidden>AI Search</button>
+      <div class="scan-result-actions" hidden>
+        <button class="secondary-button scan-result-manual" type="button" hidden>Add manually</button>
+        <button class="primary-button scan-result-ai-search" type="button" hidden>AI Search</button>
+      </div>
     </div>
   </dialog>
 

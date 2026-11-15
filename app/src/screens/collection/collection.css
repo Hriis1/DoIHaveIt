@@ -208,12 +208,39 @@
 }
 
 .collection-screen .scan-result-add,
-.collection-screen .scan-result-dismiss,
-.collection-screen .scan-result-ai-search {
+.collection-screen .scan-result-dismiss {
   display: block;
   width: 100%;
   margin-top: 20px;
   border-radius: 12px;
+}
+
+.collection-screen .scan-result-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.collection-screen .scan-result-actions button {
+  flex: 1;
+  min-width: 0;
+  padding-inline: 10px;
+  border-radius: 12px;
+}
+
+.collection-screen .scan-product-details input {
+  width: 100%;
+  min-width: 0;
+}
+
+.collection-screen .scan-product-details label {
+  margin: 0;
+  font: inherit;
+}
+
+.collection-screen .scan-product-details .error {
+  margin: 4px 0 0;
+  font-size: 13px;
 }
 
 .collection-screen #scan-result-barcode {

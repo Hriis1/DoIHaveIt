@@ -3,7 +3,7 @@ import html from './collection.html?raw'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getCollectionItems, addCollectionItem } from '../../repositories/itemRepo.js'
-import { getProductByBarcode, isProductInCollection, resolveAiProduct } from '../../repositories/productRepo.js'
+import { getProductByBarcode, isProductInCollection, resolveProduct, resolveAiProduct } from '../../repositories/productRepo.js'
 import { createScanner } from '../../modules/scan/scan.js'
 import { selectItemPhoto, deleteTemporaryPhoto, saveItemPhoto } from '../../modules/itemPhotos.js'
 import { lookupProductWithAi } from '../../modules/aiProductLookup.js'
@@ -40,6 +40,13 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const scanResultAdd = screen.querySelector('.scan-result-add')
   const scanResultDismiss = screen.querySelector('.scan-result-dismiss')
   const scanResultAiSearch = screen.querySelector('.scan-result-ai-search')
+  const scanResultActions = screen.querySelector('.scan-result-actions')
+  const scanResultManual = screen.querySelector('.scan-result-manual')
+  const brandInput = screen.querySelector('#scan-brand-input')
+  const nameInput = screen.querySelector('#scan-name-input')
+  const sizeInput = screen.querySelector('#scan-size-input')
+  const brandError = screen.querySelector('.scan-brand-error')
+  const nameError = screen.querySelector('.scan-name-error')
   const scanResultClose = screen.querySelector('.scan-result-close')
   const photoPreview = screen.querySelector('.scan-photo-preview')
   const photoCamera = screen.querySelector('.scan-photo-camera')
@@ -78,6 +85,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   listen(photoGallery, 'click', () => void choosePhoto('gallery'))
   listen(scanResultAdd, 'click', () => void addScannedProduct())
   listen(scanResultAiSearch, 'click', () => void searchWithAi())
+  listen(scanResultManual, 'click', enterProductManually)
   listen(buyCredits, 'click', event => event.preventDefault())
 
   function discardDraft() {
@@ -101,21 +109,45 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     photoCamera.disabled = photoGallery.disabled = session.selecting || session.saving
     scanResultAdd.disabled = scanResultClose.disabled = session.saving
     scanResultAdd.textContent = session.saving ? 'Adding…' : 'Add to collection'
-    scanResultAiSearch.disabled = session.searching
+    scanResultAiSearch.disabled = scanResultManual.disabled = session.searching
+    for (const input of [brandInput, nameInput, sizeInput]) input.disabled = session.saving
   }
 
   function isCurrentDraft(session) {
     return active && draft === session && !session.closed
   }
 
+  function showManualFields(manual) {
+    for (const input of [brandInput, nameInput, sizeInput]) input.hidden = !manual
+    for (const value of [scanProductBrand, scanProductName, scanProductSize]) value.hidden = manual
+    brandError.hidden = nameError.hidden = true
+    brandInput.setAttribute('aria-invalid', 'false')
+    nameInput.setAttribute('aria-invalid', 'false')
+  }
+
+  function enterProductManually() {
+    const session = draft
+    if (!session || !isCurrentDraft(session) || session.product || session.searching || session.saving) return
+    session.manual = true
+    brandInput.value = nameInput.value = sizeInput.value = ''
+    showManualFields(true)
+    scanResultTitle.textContent = 'Add product manually'
+    scanResultActions.hidden = scanResultManual.hidden = scanResultAiSearch.hidden = true
+    scanResultError.hidden = buyCredits.hidden = true
+    scanResultProduct.hidden = scanResultAdd.hidden = scanProductSizeRow.hidden = false
+  }
+
   async function renderProductResult(session, product) {
     const inCollection = product ? await isProductInCollection(product.id, collection.id) : false
     if (!isCurrentDraft(session)) return
+    session.inCollection = inCollection
+    showManualFields(false)
     scanResultTitle.textContent = inCollection
       ? `${product.name} already in collection`
       : product ? 'Product found in catalog' : 'Unrecognized product'
     scanResultDismiss.hidden = !inCollection
     scanResultAiSearch.hidden = Boolean(product)
+    scanResultManual.hidden = scanResultActions.hidden = Boolean(product)
     scanResultProduct.hidden = scanResultAdd.hidden = !product || inCollection
     if (product && !inCollection) {
       session.product = product
@@ -124,11 +156,12 @@ export function mountCollectionScreen(container, { collection, isNative, databas
       scanProductSize.textContent = product.size ?? ''
       scanProductSizeRow.hidden = product.size === null
     }
+    return inCollection
   }
 
   async function searchWithAi() {
     const session = draft
-    if (!session || session.closed || session.product || session.searching || session.saving) return
+    if (!session || session.closed || session.product || session.manual || session.searching || session.saving) return
     session.searching = true
     updatePhotoControls(session)
     scanResultError.hidden = true
@@ -160,7 +193,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
 
   async function choosePhoto(source) {
     const session = draft
-    if (!session?.product || session.selecting || session.saving) return
+    if (!session || (!session.product && !session.manual) || session.selecting || session.saving) return
     session.selecting = true
     updatePhotoControls(session)
     showPhotoError('')
@@ -190,15 +223,42 @@ export function mountCollectionScreen(container, { collection, isNative, databas
 
   async function addScannedProduct() {
     const session = draft
-    if (!session?.product || session.saving) return
+    if (!session || (!session.product && !session.manual) || session.saving || session.inCollection) return
+    let manualProduct
+    if (session.manual) {
+      manualProduct = { brand: brandInput.value.trim().toLowerCase(), name: nameInput.value.trim().toLowerCase(),
+        size: sizeInput.value.trim().toLowerCase() || null }
+      brandError.textContent = 'Brand required'
+      nameError.textContent = 'Name required'
+      brandError.hidden = Boolean(manualProduct.brand)
+      nameError.hidden = Boolean(manualProduct.name)
+      brandInput.setAttribute('aria-invalid', String(!manualProduct.brand))
+      nameInput.setAttribute('aria-invalid', String(!manualProduct.name))
+    }
     if (!session.photo || session.selecting) {
       showPhotoError('Photo required')
       return
     }
+    if (manualProduct && (!manualProduct.brand || !manualProduct.name)) return
     session.saving = true
     updatePhotoControls(session)
     showPhotoError('')
     try {
+      if (manualProduct) {
+        await databaseReady
+        if (!isCurrentDraft(session)) return
+        const product = await resolveProduct(session.barcode, manualProduct, { signal: session.lookupController.signal })
+        if (!isCurrentDraft(session)) return
+        session.product = product
+        session.manual = false
+        const inCollection = await renderProductResult(session, product)
+        if (!isCurrentDraft(session)) return
+        if (inCollection) {
+          await deleteTemporaryPhoto(session.photo)
+          session.photo = undefined
+          return
+        }
+      }
       await saveItemPhoto(session.photo, path => addCollectionItem(collection.id, session.product.id, path))
       session.photo = undefined
       if (!active || draft !== session) return
@@ -237,6 +297,8 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     scanResultAdd.hidden = true
     scanResultDismiss.hidden = true
     scanResultAiSearch.hidden = true
+    scanResultManual.hidden = scanResultActions.hidden = true
+    showManualFields(false)
     scanResultTitle.textContent = 'Looking up product…'
     scanResultBarcode.textContent = `Barcode: ${barcode}`
     scanResultDialog.showModal()

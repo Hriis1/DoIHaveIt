@@ -19,6 +19,8 @@ export function createBannerAds({ capacitor = Capacitor, app = App, ads = AdMob,
   let loading = false
   let visible = false
   let enabled = false
+  let screenEnabled = false
+  let pauses = 0
   let pending = Promise.resolve()
 
   async function showBanner() {
@@ -68,7 +70,7 @@ export function createBannerAds({ capacitor = Capacitor, app = App, ads = AdMob,
   }
 
   // Serialize screen changes so an in-flight load is removed before hiding completes.
-  function setEnabled(value) {
+  function updateEnabled(value) {
     if (capacitor.getPlatform() !== 'android' || enabled === value) return pending
     enabled = value
     if (!enabled) setHeight(0)
@@ -86,7 +88,25 @@ export function createBannerAds({ capacitor = Capacitor, app = App, ads = AdMob,
     return pending
   }
 
-  return { setEnabled }
+  function setEnabled(value) {
+    screenEnabled = value
+    return updateEnabled(screenEnabled && pauses === 0)
+  }
+
+  // Temporary overlays must not override the underlying screen's ad preference.
+  async function pause() {
+    pauses++
+    await updateEnabled(false)
+    let resumed = false
+    return () => {
+      if (resumed) return pending
+      resumed = true
+      pauses--
+      return updateEnabled(screenEnabled && pauses === 0)
+    }
+  }
+
+  return { setEnabled, pause }
 }
 
 export const bannerAds = createBannerAds()

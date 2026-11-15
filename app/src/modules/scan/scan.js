@@ -2,6 +2,7 @@ import './scan.css'
 import html from './scan.html?raw'
 import { Capacitor } from '@capacitor/core'
 import { BarcodeScanner, LensFacing } from '@capacitor-mlkit/barcode-scanning'
+import { bannerAds } from '../bannerAds.js'
 
 export function createScanner({ onScan, onError }) {
   let current
@@ -71,6 +72,7 @@ export function createScanner({ onScan, onError }) {
         session.overlay.close()
         session.overlay.remove()
         document.documentElement.classList.remove('scan-active')
+        await session.resumeBanner?.()
         current = undefined
       }
       if (disposed) return
@@ -81,6 +83,8 @@ export function createScanner({ onScan, onError }) {
   }
 
   async function start(session) {
+    session.resumeBanner = await bannerAds.pause()
+    if (session.closed) return
     const { supported } = await BarcodeScanner.isSupported()
     if (session.closed) return
     if (!supported) throw new Error('No camera is available for barcode scanning.')

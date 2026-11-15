@@ -50,11 +50,11 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const sizeOptions = screen.querySelector('#scan-size-options')
   const manualSelects = [
     { input: brandInput, list: brandOptions, toggle: screen.querySelector('#scan-brand-toggle'), field: screen.querySelector('.scan-brand-select'),
-      getOptions: brand => getProductBrands(brand, 100) },
+      getOptions: brand => getProductBrands(brand, 50) },
     { input: nameInput, list: nameOptions, toggle: screen.querySelector('#scan-name-toggle'), field: screen.querySelector('.scan-name-select'),
-      getOptions: (brand, name) => brand ? getProductNames(brand, name, 100) : [] },
+      getOptions: (brand, name) => brand ? getProductNames(brand, name, 50) : [] },
     { input: sizeInput, list: sizeOptions, toggle: screen.querySelector('#scan-size-toggle'), field: screen.querySelector('.scan-size-select'),
-      getOptions: (brand, name, size) => brand && name ? getProductSizes(brand, name, size, 100) : [] },
+      getOptions: (brand, name, size) => brand && name ? getProductSizes(brand, name, size, 50) : [] },
   ]
   let openSelect
   let optionRequest = 0

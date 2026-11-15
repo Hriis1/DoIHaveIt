@@ -233,6 +233,74 @@
   min-width: 0;
 }
 
+.collection-screen .scan-manual-select {
+  position: relative;
+}
+
+.collection-screen .scan-manual-select input {
+  display: block;
+  padding-right: 48px;
+}
+
+.collection-screen .scan-options-toggle {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: calc(100% - 2px);
+  padding: 0;
+  border: 0;
+  border-radius: 0 11px 11px 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.collection-screen .scan-options-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.collection-screen .scan-manual-options {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 4px);
+  left: 0;
+  width: 100%;
+  max-height: min(144px, 25dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 6px 16px #0002;
+}
+
+.collection-screen .scan-manual-options button {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.collection-screen .scan-manual-options button:focus-visible,
+.collection-screen .scan-manual-options button[aria-selected="true"] {
+  background: var(--soft);
+  outline-offset: -2px;
+}
+
+.collection-screen .scan-manual-options p {
+  margin: 0;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .collection-screen .scan-product-details label {
   margin: 0;
   font: inherit;

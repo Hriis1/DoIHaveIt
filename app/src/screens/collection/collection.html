@@ -39,9 +39,41 @@
       <a class="scan-result-buy-credits" href="#" hidden>Buy credits</a>
       <div class="scan-result-product" hidden>
         <dl class="scan-product-details">
-          <div><dt><label for="scan-brand-input">Brand</label></dt><dd><span class="scan-product-brand"></span><input id="scan-brand-input" type="text" list="scan-brand-options" autocomplete="off" required aria-describedby="scan-brand-error" hidden /><datalist id="scan-brand-options"></datalist><p class="error scan-brand-error" id="scan-brand-error" role="alert" hidden></p></dd></div>
-          <div><dt><label for="scan-name-input">Name</label></dt><dd><span class="scan-product-name"></span><input id="scan-name-input" type="text" list="scan-name-options" autocomplete="off" required aria-describedby="scan-name-error" hidden /><datalist id="scan-name-options"></datalist><p class="error scan-name-error" id="scan-name-error" role="alert" hidden></p></dd></div>
-          <div class="scan-product-size-row"><dt><label for="scan-size-input">Size</label></dt><dd><span class="scan-product-size"></span><input id="scan-size-input" type="text" list="scan-size-options" placeholder="Optional" autocomplete="off" hidden /><datalist id="scan-size-options"></datalist></dd></div>
+          <div>
+            <dt><label for="scan-brand-input">Brand</label></dt>
+            <dd>
+              <span class="scan-product-brand"></span>
+              <div class="scan-manual-select scan-brand-select" hidden>
+                <input id="scan-brand-input" type="text" autocomplete="off" required aria-describedby="scan-brand-error" hidden />
+                <button id="scan-brand-toggle" class="scan-options-toggle" type="button" aria-label="Show brands" aria-controls="scan-brand-options" aria-haspopup="listbox" aria-expanded="false"><svg aria-hidden="true"><use href="#icon-chevron-down" /></svg></button>
+                <div id="scan-brand-options" class="scan-manual-options" role="listbox" aria-label="Brands" hidden></div>
+              </div>
+              <p class="error scan-brand-error" id="scan-brand-error" role="alert" hidden></p>
+            </dd>
+          </div>
+          <div>
+            <dt><label for="scan-name-input">Name</label></dt>
+            <dd>
+              <span class="scan-product-name"></span>
+              <div class="scan-manual-select scan-name-select" hidden>
+                <input id="scan-name-input" type="text" autocomplete="off" required aria-describedby="scan-name-error" hidden />
+                <button id="scan-name-toggle" class="scan-options-toggle" type="button" aria-label="Show product names" aria-controls="scan-name-options" aria-haspopup="listbox" aria-expanded="false"><svg aria-hidden="true"><use href="#icon-chevron-down" /></svg></button>
+                <div id="scan-name-options" class="scan-manual-options" role="listbox" aria-label="Product names" hidden></div>
+              </div>
+              <p class="error scan-name-error" id="scan-name-error" role="alert" hidden></p>
+            </dd>
+          </div>
+          <div class="scan-product-size-row">
+            <dt><label for="scan-size-input">Size</label></dt>
+            <dd>
+              <span class="scan-product-size"></span>
+              <div class="scan-manual-select scan-size-select" hidden>
+                <input id="scan-size-input" type="text" placeholder="Optional" autocomplete="off" hidden />
+                <button id="scan-size-toggle" class="scan-options-toggle" type="button" aria-label="Show sizes" aria-controls="scan-size-options" aria-haspopup="listbox" aria-expanded="false"><svg aria-hidden="true"><use href="#icon-chevron-down" /></svg></button>
+                <div id="scan-size-options" class="scan-manual-options" role="listbox" aria-label="Sizes" hidden></div>
+              </div>
+            </dd>
+          </div>
           <div class="scan-product-photo-row">
             <dt>Photo</dt>
             <dd class="scan-photo-controls">

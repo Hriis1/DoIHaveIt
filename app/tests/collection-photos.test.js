@@ -19,15 +19,21 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
   const node = selector => {
     if (!nodes.has(selector)) {
       const listeners = new Map()
+      const attributes = new Map()
       nodes.set(selector, {
         hidden: false, disabled: false, open: false, textContent: '', value: '', children: [],
         addEventListener: (event, handler) => listeners.set(event, handler),
-        emit: (event = 'click') => listeners.get(event)?.({ preventDefault() {} }),
-        setAttribute() {},
+        emit(event = 'click', data = {}) { return listeners.get(event)?.({ target: this, preventDefault() {}, ...data }) },
+        setAttribute: (name, value) => attributes.set(name, value),
+        getAttribute: name => attributes.get(name),
+        focus() { this.focused = true },
+        contains(target) { return target === this || this.children.includes(target) },
         replaceChildren(...children) {
           this.children = children.length === 1 && children[0].isFragment ? children[0].children : children
         },
-        querySelector: child => node(`${selector} ${child}`),
+        querySelector(child) { return child === '[role="option"]'
+          ? this.children.find(option => option.getAttribute('role') === 'option') : node(`${selector} ${child}`) },
+        querySelectorAll() { return this.children.filter(option => option.getAttribute('role') === 'option') },
         showModal() { this.open = true },
         close() { this.open = false; this.emit('close') },
         remove() {},
@@ -51,9 +57,10 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
   let names = async () => []
   let sizes = async () => []
   let save = async (photo, insert) => { await insert('item-photos/saved.jpg'); deleted.push(photo) }
+  let created = 0
   const context = {
     html: '', AbortController, console: { error() {} },
-    document: { createElement: () => ({}), createDocumentFragment: () => ({ isFragment: true, children: [],
+    document: { createElement: tag => node(`created-${tag}-${created++}`), createDocumentFragment: () => ({ isFragment: true, children: [],
       appendChild(child) { this.children.push(child) } }) },
     getProductByBarcode: async () => product,
     getProductBrands: () => brands(),
@@ -90,19 +97,39 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
   }
 }
 
-test('large product option lists do not exceed the JavaScript argument limit', async () => {
+test('dropdowns load only when their arrow opens them, and toggle fully closed without blurring', async () => {
   const ui = popup({ product: null })
-  const values = Array.from({ length: 200000 }, (_, index) => `brand ${index}`)
-  ui.options({ brands: async () => values })
+  const values = Array.from({ length: 100 }, (_, index) => `brand ${index}`)
+  let calls = 0
+  ui.options({ brands: async () => { calls++; return values } })
   await ui.scan()
   ui.node('.scan-result-manual').emit()
+  ui.node('#scan-brand-input').emit('focus')
+  ui.node('#scan-brand-input').value = 'brand'
+  ui.node('#scan-brand-input').emit('input')
   await settle()
+  assert.equal(calls, 0)
+  ui.node('#scan-brand-toggle').emit()
+  await settle()
+  assert.equal(calls, 1)
+  assert.equal(ui.node('#scan-brand-options').hidden, false)
   assert.equal(ui.node('#scan-brand-options').children.length, values.length)
   assert.equal(ui.node('#scan-brand-options').children.at(-1).value, values.at(-1))
-  assert.equal(ui.node('.scan-result-error').hidden, true)
+  assert.equal(ui.node('#scan-brand-toggle').getAttribute('aria-expanded'), 'true')
+  ui.node('#scan-brand-toggle').emit()
+  assert.equal(ui.node('#scan-brand-options').hidden, true)
+  assert.equal(ui.node('#scan-brand-options').children.length, 0)
+  assert.equal(ui.node('#scan-brand-toggle').getAttribute('aria-expanded'), 'false')
+  assert.equal(calls, 1)
+  ui.node('#scan-brand-toggle').emit()
+  await settle()
+  assert.equal(calls, 2)
+  ui.node('#scan-brand-input').emit('focus')
+  assert.equal(ui.node('#scan-brand-options').hidden, true)
+  assert.equal(calls, 2)
 })
 
-test('manual dropdowns refresh by trimmed brand and name without clearing entered values', async () => {
+test('opening each dropdown uses current trimmed dependencies and preserves other entered values', async () => {
   const ui = popup({ product: null })
   const requested = []
   ui.options({ brands: async () => ['brand', 'other'],
@@ -113,31 +140,41 @@ test('manual dropdowns refresh by trimmed brand and name without clearing entere
     } })
   await ui.scan()
   ui.node('.scan-result-manual').emit()
-  await settle()
-  assert.deepEqual(ui.node('#scan-brand-options').children.map(option => option.value), ['brand', 'other'])
   ui.node('#scan-brand-input').value = ' Brand   '
   ui.node('#scan-name-input').value = ' Product  '
   ui.node('#scan-size-input').value = 'Custom size '
-  ui.node('#scan-brand-input').emit('input')
+  ui.node('#scan-name-toggle').emit()
   await settle()
-  assert.equal(JSON.stringify(requested), JSON.stringify([['names', 'brand'], ['sizes', 'brand', 'product']]))
   assert.deepEqual(ui.node('#scan-name-options').children.map(option => option.value), ['product', 'second'])
+  ui.node('#scan-size-toggle').emit()
+  await settle()
+  assert.equal(ui.node('#scan-name-options').hidden, true)
+  assert.equal(JSON.stringify(requested), JSON.stringify([['names', 'brand'], ['sizes', 'brand', 'product']]))
   assert.deepEqual(ui.node('#scan-size-options').children.map(option => option.value), ['330 ml', '500 ml'])
+  ui.node('#scan-size-options').children[0].emit()
+  assert.equal(ui.node('#scan-size-input').value, '330 ml')
+  assert.equal(ui.node('#scan-brand-input').value, ' Brand   ')
+  assert.equal(ui.node('#scan-name-input').value, ' Product  ')
+  assert.equal(ui.node('#scan-size-options').hidden, true)
+  ui.node('#scan-size-input').value = 'Custom size '
   ui.node('#scan-brand-input').value = 'unknown'
   ui.node('#scan-brand-input').emit('input')
   await settle()
+  assert.equal(requested.length, 2)
   assert.equal(ui.node('#scan-name-input').value, ' Product  ')
   assert.equal(ui.node('#scan-size-input').value, 'Custom size ')
-  assert.equal(ui.node('#scan-name-options').children.length, 0)
-  assert.equal(ui.node('#scan-size-options').children.length, 0)
+  ui.node('#scan-name-toggle').emit()
+  await settle()
+  assert.equal(ui.node('#scan-name-options').children[0].textContent, 'No saved options')
   ui.node('#scan-brand-input').value = 'brand'
   ui.node('#scan-brand-input').emit('input')
   await settle()
   ui.node('#scan-name-input').value = 'New name'
   ui.node('#scan-name-input').emit('input')
   await settle()
-  assert.equal(ui.node('#scan-name-options').children.length, 2)
-  assert.equal(ui.node('#scan-size-options').children.length, 0)
+  ui.node('#scan-size-toggle').emit()
+  await settle()
+  assert.equal(ui.node('#scan-size-options').children[0].textContent, 'No saved options')
   assert.equal(ui.node('#scan-size-input').value, 'Custom size ')
 })
 
@@ -151,19 +188,23 @@ test('outdated dropdown results cannot replace newer options or update a closed 
   ui.node('.scan-result-manual').emit()
   ui.node('#scan-brand-input').value = 'old'
   ui.node('#scan-name-input').value = 'name'
-  ui.node('#scan-brand-input').emit('input')
+  ui.node('#scan-name-toggle').emit()
   await settle()
+  ui.node('#scan-name-toggle').emit()
+  assert.equal(ui.node('#scan-name-options').hidden, true)
   ui.node('#scan-brand-input').value = 'new'
-  ui.node('#scan-brand-input').emit('input')
+  ui.node('#scan-name-toggle').emit()
+  await settle()
+  ui.node('#scan-size-toggle').emit()
   await settle()
   oldNames.resolve(['outdated name'])
   oldSizes.resolve(['outdated size'])
   await settle()
-  assert.deepEqual(ui.node('#scan-name-options').children.map(option => option.value), ['new name'])
+  assert.equal(ui.node('#scan-name-options').hidden, true)
   assert.deepEqual(ui.node('#scan-size-options').children.map(option => option.value), ['new size'])
   const late = deferred()
   ui.options({ names: () => late.promise })
-  ui.node('#scan-brand-input').emit('input')
+  ui.node('#scan-name-toggle').emit()
   await settle()
   ui.node('.scan-result-close').emit()
   late.resolve(['late name'])
@@ -171,13 +212,40 @@ test('outdated dropdown results cannot replace newer options or update a closed 
   assert.equal(ui.node('#scan-name-options').children.length, 0)
 })
 
+test('outside taps and Escape or Android back close the dropdown before the popup', async () => {
+  const ui = popup({ product: null })
+  ui.options({ brands: async () => ['brand'] })
+  await ui.scan()
+  ui.node('.scan-result-manual').emit()
+  ui.node('#scan-brand-toggle').emit()
+  await settle()
+  ui.node('.scan-result-dialog').emit('pointerdown')
+  assert.equal(ui.node('#scan-brand-options').hidden, true)
+  assert.equal(ui.node('.scan-result-dialog').open, true)
+  ui.node('#scan-brand-toggle').emit()
+  await settle()
+  let prevented = false
+  ui.node('.scan-result-dialog').emit('keydown', { key: 'Escape', preventDefault: () => { prevented = true } })
+  assert.equal(prevented, true)
+  assert.equal(ui.node('#scan-brand-options').hidden, true)
+  assert.equal(ui.node('.scan-result-dialog').open, true)
+  ui.node('#scan-brand-toggle').emit()
+  await settle()
+  ui.node('.scan-result-dialog').emit('cancel')
+  assert.equal(ui.node('#scan-brand-options').hidden, true)
+  assert.equal(ui.node('.scan-result-dialog').open, true)
+  ui.node('.scan-result-dialog').emit('cancel')
+  assert.equal(ui.node('.scan-result-dialog').open, false)
+})
+
 test('suggestion failures leave custom values usable and do not prevent adding', async () => {
   const ui = popup({ product: null })
   ui.options({ brands: async () => { throw new Error('Read failed') } })
   await ui.scan()
   ui.node('.scan-result-manual').emit()
+  ui.node('#scan-brand-toggle').emit()
   await settle()
-  assert.equal(ui.node('.scan-result-error').hidden, false)
+  assert.equal(ui.node('#scan-brand-options').children[0].textContent, 'Could not load options. You can still type a value.')
   ui.node('#scan-brand-input').value = ' Brand '
   ui.node('#scan-name-input').value = ' Custom name '
   ui.node('#scan-size-input').value = '   '

@@ -3,7 +3,7 @@ import html from './collection.html?raw'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getCollectionItems, addCollectionItem } from '../../repositories/itemRepo.js'
-import { getProductByBarcode, isProductInCollection, resolveProduct, resolveAiProduct } from '../../repositories/productRepo.js'
+import { getProductByBarcode, getProductBrands, getProductNames, getProductSizes, isProductInCollection, resolveProduct, resolveAiProduct } from '../../repositories/productRepo.js'
 import { createScanner } from '../../modules/scan/scan.js'
 import { selectItemPhoto, deleteTemporaryPhoto, saveItemPhoto } from '../../modules/itemPhotos.js'
 import { lookupProductWithAi } from '../../modules/aiProductLookup.js'
@@ -45,6 +45,10 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   const brandInput = screen.querySelector('#scan-brand-input')
   const nameInput = screen.querySelector('#scan-name-input')
   const sizeInput = screen.querySelector('#scan-size-input')
+  const brandOptions = screen.querySelector('#scan-brand-options')
+  const nameOptions = screen.querySelector('#scan-name-options')
+  const sizeOptions = screen.querySelector('#scan-size-options')
+  const optionRequests = new Map()
   const brandError = screen.querySelector('.scan-brand-error')
   const nameError = screen.querySelector('.scan-name-error')
   const scanResultClose = screen.querySelector('.scan-result-close')
@@ -86,6 +90,8 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   listen(scanResultAdd, 'click', () => void addScannedProduct())
   listen(scanResultAiSearch, 'click', () => void searchWithAi())
   listen(scanResultManual, 'click', enterProductManually)
+  listen(brandInput, 'input', () => refreshManualOptions(true))
+  listen(nameInput, 'input', () => refreshManualOptions(false))
   listen(buyCredits, 'click', event => event.preventDefault())
 
   function discardDraft() {
@@ -125,6 +131,40 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     nameInput.setAttribute('aria-invalid', 'false')
   }
 
+  async function loadManualOptions(session, list, getOptions) {
+    const request = (optionRequests.get(list) ?? 0) + 1
+    optionRequests.set(list, request)
+    list.replaceChildren()
+    const isCurrent = () => isCurrentDraft(session) && session.manual && optionRequests.get(list) === request
+    try {
+      await databaseReady
+      if (!isCurrent()) return
+      const values = await getOptions()
+      if (!isCurrent()) return
+      list.replaceChildren(...values.map(value => {
+        const option = document.createElement('option')
+        option.value = value
+        return option
+      }))
+    } catch (error) {
+      if (!isCurrent()) return
+      console.error('Could not load product options:', error)
+      scanResultError.textContent = 'Could not load suggestions. You can still enter your own values.'
+      scanResultError.hidden = false
+    }
+  }
+
+  // Refresh dependent options without changing anything the user has entered.
+  function refreshManualOptions(includeNames) {
+    const session = draft
+    if (!session?.manual || session.saving) return
+    const brand = brandInput.value.trim().toLowerCase()
+    const name = nameInput.value.trim().toLowerCase()
+    scanResultError.hidden = true
+    if (includeNames) void loadManualOptions(session, nameOptions, () => brand ? getProductNames(brand) : [])
+    void loadManualOptions(session, sizeOptions, () => brand && name ? getProductSizes(brand, name) : [])
+  }
+
   function enterProductManually() {
     const session = draft
     if (!session || !isCurrentDraft(session) || session.product || session.searching || session.saving) return
@@ -135,6 +175,8 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     scanResultActions.hidden = scanResultManual.hidden = scanResultAiSearch.hidden = true
     scanResultError.hidden = buyCredits.hidden = true
     scanResultProduct.hidden = scanResultAdd.hidden = scanProductSizeRow.hidden = false
+    void loadManualOptions(session, brandOptions, getProductBrands)
+    refreshManualOptions(true)
   }
 
   async function renderProductResult(session, product) {

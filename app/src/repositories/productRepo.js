@@ -27,7 +27,7 @@ async function findProductByBarcode(database, barcode) {
 async function findMatchingProduct(database, product) {
   const { values } = await database.query(`
     SELECT id, brand, name, size FROM products
-    WHERE lower(brand) = ? AND lower(name) = ? AND lower(size) IS ?;
+    WHERE lower(trim(brand)) = ? AND lower(trim(name)) = ? AND lower(trim(size)) IS ?;
   `, [product.brand, product.name, product.size])
   return values?.[0] ?? null
 }
@@ -36,6 +36,28 @@ async function findMatchingProduct(database, product) {
 export function createProductRepository(access = withDatabaseAccess) {
   const repository = {
     getProductByBarcode: barcode => access(database => findProductByBarcode(database, barcode)),
+    getProductBrands: () => access(async database => {
+      const { values } = await database.query(`
+        SELECT DISTINCT lower(trim(brand)) AS value FROM products
+        WHERE trim(brand) <> '' ORDER BY value COLLATE NOCASE;
+      `)
+      return (values ?? []).map(row => row.value)
+    }),
+    getProductNames: brand => access(async database => {
+      const { values } = await database.query(`
+        SELECT DISTINCT lower(trim(name)) AS value FROM products
+        WHERE lower(trim(brand)) = ? AND trim(name) <> '' ORDER BY value COLLATE NOCASE;
+      `, [brand.trim().toLowerCase()])
+      return (values ?? []).map(row => row.value)
+    }),
+    getProductSizes: (brand, name) => access(async database => {
+      const { values } = await database.query(`
+        SELECT DISTINCT lower(trim(size)) AS value FROM products
+        WHERE lower(trim(brand)) = ? AND lower(trim(name)) = ?
+          AND size IS NOT NULL AND trim(size) <> '' ORDER BY value COLLATE NOCASE;
+      `, [brand.trim().toLowerCase(), name.trim().toLowerCase()])
+      return (values ?? []).map(row => row.value)
+    }),
     resolveProduct: async (barcode, product, { signal } = {}) => {
       const isText = value => typeof value === 'string' && value.trim().length > 0
       if (!isText(barcode) || !product || !isText(product.brand) || !isText(product.name)
@@ -116,4 +138,5 @@ export function createProductRepository(access = withDatabaseAccess) {
   return { ...repository, resolveAiProduct: repository.resolveProduct }
 }
 
-export const { getProducts, getProductByBarcode, isProductInCollection, resolveProduct, resolveAiProduct } = createProductRepository()
+export const { getProducts, getProductByBarcode, getProductBrands, getProductNames, getProductSizes,
+  isProductInCollection, resolveProduct, resolveAiProduct } = createProductRepository()

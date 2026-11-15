@@ -239,6 +239,7 @@
 
 .collection-screen .scan-manual-select input {
   display: block;
+  padding-left: 12px;
   padding-right: 48px;
 }
 
@@ -267,7 +268,7 @@
   top: calc(100% + 4px);
   left: 0;
   width: 100%;
-  max-height: min(144px, 25dvh);
+  max-height: min(216px, 37.5dvh);
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--border);

@@ -33,7 +33,7 @@ dialog.scan-overlay {
 .scan-overlay .scan-close {
   position: absolute;
   z-index: 1;
-  top: calc(16px + env(safe-area-inset-top));
+  top: calc(var(--banner-height) + 16px + env(safe-area-inset-top));
   right: calc(16px + env(safe-area-inset-right));
   width: 48px;
   height: 48px;

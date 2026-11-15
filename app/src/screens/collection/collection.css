@@ -311,7 +311,7 @@
 
 @media (max-height: 740px) {
   #app[data-screen="collection"] {
-    padding-top: calc(16px + env(safe-area-inset-top));
+    padding-top: calc(var(--banner-height) + 16px + env(safe-area-inset-top));
     padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
 

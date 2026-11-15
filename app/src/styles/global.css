@@ -1,4 +1,5 @@
 :root {
+  --banner-height: 0px;
   color-scheme: light dark;
   --background: light-dark(#faf9f6, #191b1a);
   --surface: light-dark(#fff, #242725);
@@ -30,7 +31,7 @@ body {
   max-width: 480px;
   min-height: 100svh;
   margin: 0 auto;
-  padding: calc(30px + env(safe-area-inset-top)) calc(22px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(22px + env(safe-area-inset-left));
+  padding: calc(var(--banner-height) + 30px + env(safe-area-inset-top)) calc(22px + env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) calc(22px + env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
 }

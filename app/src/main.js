@@ -12,6 +12,7 @@ import { auth } from './modules/auth.js'
 import { prepareCatalogCache } from './modules/catalog/archive.js'
 import { App } from '@capacitor/app'
 import { preparePhotoCache, discardCameraResult } from './modules/itemPhotos.js'
+import { bannerAds } from './modules/bannerAds.js'
 
 const app = document.querySelector('#app')
 const container = document.querySelector('#screen-content')
@@ -79,6 +80,7 @@ export function showScreen(name, parameters = {}) {
   if (isAuth) showCreditBalance(null)
   document.querySelector('.brand').disabled = isAuth
   app.dataset.screen = name
+  void bannerAds.setEnabled(!isAuth)
   unmountScreen = mountScreen(container, { ...parameters, isNative, databaseReady, navigate: showScreen,
     onAuthenticated: user => {
       canAccessApp = true

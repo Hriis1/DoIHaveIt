@@ -20,9 +20,11 @@ function mount(restoreSession) {
     return nodes.get(selector)
   }
   const mounts = []
+  const bannerVisibility = []
   let creditListener
   const screen = name => (_container, options) => { mounts.push({ name, options }); return () => {} }
   const context = {
+    bannerAds: { setEnabled: async value => bannerVisibility.push(value) },
     document: { querySelector: node, addEventListener() {} }, window: { scrollTo() {} },
     Capacitor: { isNativePlatform: () => false }, auth: { restoreSession, subscribeCreditBalance(listener) { creditListener = listener } },
     mountCollectionsScreen: screen('collections'), mountCollectionScreen: screen('collection'),
@@ -31,7 +33,7 @@ function mount(restoreSession) {
     mountAccountScreen: screen('account'),
   }
   runInNewContext(source + '\nthis.show = showScreen', context)
-  return { node, mounts, show: context.show, updateCredits: user => creditListener(user) }
+  return { node, mounts, bannerVisibility, show: context.show, updateCredits: user => creditListener(user) }
 }
 
 test('startup requires login without a session and gates the app shell until authentication succeeds', async () => {
@@ -40,12 +42,17 @@ test('startup requires login without a session and gates the app shell until aut
   assert.equal(app.mounts.at(-1).options.mode, 'login')
   assert.equal(app.node('.app-menu').hidden, true)
   assert.equal(app.node('.brand').disabled, true)
+  assert.equal(app.bannerVisibility.at(-1), false)
+  app.show('register')
+  assert.equal(app.bannerVisibility.at(-1), false)
+  app.show('login')
   app.show('collections')
-  assert.equal(app.mounts.length, 1)
+  assert.equal(app.mounts.length, 3)
   app.mounts[0].options.onAuthenticated()
   app.mounts[0].options.navigate('collections')
   assert.equal(app.mounts.at(-1).name, 'collections')
   assert.equal(app.node('.app-menu').hidden, false)
+  assert.equal(app.bannerVisibility.at(-1), true)
 })
 
 test('authenticated and offline cached sessions open collections directly', async () => {

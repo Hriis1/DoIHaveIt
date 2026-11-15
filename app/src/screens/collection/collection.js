@@ -149,7 +149,8 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     } catch (error) {
       if (!isCurrent()) return
       console.error('Could not load product options:', error)
-      scanResultError.textContent = 'Could not load suggestions. You can still enter your own values.'
+      //scanResultError.textContent = 'Could not load suggestions. You can still enter your own values.'
+      scanResultError.textContent = error.message + " zaza test"
       scanResultError.hidden = false
     }
   }

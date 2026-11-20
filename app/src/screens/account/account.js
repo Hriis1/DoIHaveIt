@@ -8,13 +8,16 @@ export function mountAccountScreen(container, { navigate }) {
   const status = screen.querySelector('.account-status')
   const error = screen.querySelector('.account-error')
   let active = true
+  const unsubscribe = auth.subscribeCreditBalance(user => {
+    if (active && user) screen.querySelector('.account-balance').textContent = user.credits.toLocaleString()
+  })
   const addCredit = () => navigate('add-credit')
   const addButton = screen.querySelector('.primary-button')
   addButton.addEventListener('click', addCredit)
 
   async function loadAccount() {
     try {
-      const user = await auth.getCurrentUser()
+      const user = await auth.refreshCredits().catch(() => auth.getCurrentUser())
       if (!active) return
       if (!user) {
         status.textContent = 'No account details are available.'
@@ -35,6 +38,7 @@ export function mountAccountScreen(container, { navigate }) {
   void loadAccount()
   return () => {
     active = false
+    unsubscribe()
     addButton.removeEventListener('click', addCredit)
     screen.remove()
   }

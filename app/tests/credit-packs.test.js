@@ -5,13 +5,14 @@ mock.module('@capacitor/core', { namedExports: { Capacitor: {} } })
 mock.module('@revenuecat/purchases-capacitor', { namedExports: { Purchases: {} } })
 const { createCreditPacks } = await import('../src/modules/creditPacks.js')
 
-function setup({ platform = 'android', configure = async () => {}, getOfferings } = {}) {
+function setup({ platform = 'android', configure = async () => {}, getOfferings, purchasePackage = async () => ({ transaction: { transactionIdentifier: 'order1' } }) } = {}) {
   const calls = []
   const store = createCreditPacks({
     capacitor: { getPlatform: () => platform },
     purchases: {
       configure: async options => { calls.push(['configure', options]); await configure() },
       logIn: async options => { calls.push(['login', options]) },
+      purchasePackage: async options => { calls.push(['purchase', options]); return purchasePackage(options) },
       getOfferings: getOfferings ?? (async () => ({ current: { availablePackages: [
         { identifier: 'credits_600', product: { priceString: '4,99 €' } },
         { identifier: 'unknown', product: { priceString: '100 €' } },
@@ -32,6 +33,42 @@ test('packs come from the current offering with localized prices and known credi
   ])
   assert.equal(store.calls[0][1].appUserID, '12')
   assert.match(store.calls[0][1].apiKey, /^goog_/)
+})
+
+test('purchases use the original package and retain transaction confirmation per account', async () => {
+  const store = setup()
+  await store.getCreditPacks(12)
+  assert.deepEqual(await store.purchaseCreditPack(12, 'credits_100'), { status: 'purchased', transactionId: 'order1' })
+  assert.equal(store.calls.at(-1)[1].aPackage.identifier, 'credits_100')
+  assert.equal(store.getPendingPurchase(12), 'order1')
+  assert.equal(store.getPendingPurchase(13), undefined)
+  store.clearPendingPurchase(12, 'wrong')
+  assert.equal(store.getPendingPurchase(12), 'order1')
+  store.clearPendingPurchase(12, 'order1')
+  assert.equal(store.getPendingPurchase(12), undefined)
+})
+
+test('purchase errors distinguish cancellation and pending payment and sanitize other failures', async () => {
+  for (const [code, expected] of [['1', 'cancelled'], ['20', 'pending'], ['2', null]]) {
+    const store = setup({ purchasePackage: async () => { throw { code, message: 'private provider detail' } } })
+    await store.getCreditPacks(12)
+    if (expected) assert.deepEqual(await store.purchaseCreditPack(12, 'credits_100'), { status: expected })
+    else await assert.rejects(store.purchaseCreditPack(12, 'credits_100'), error => !error.message.includes('private'))
+    assert.equal(store.getPendingPurchase(12), undefined)
+    assert.equal(store.isPurchasing(), false)
+  }
+})
+
+test('purchase locking survives screen changes; stale packages cannot be purchased by another account', async () => {
+  let resolve
+  const store = setup({ purchasePackage: () => new Promise(yes => { resolve = yes }) })
+  await store.getCreditPacks(12)
+  const buying = store.purchaseCreditPack(12, 'credits_100')
+  await new Promise(yes => setImmediate(yes))
+  await assert.rejects(store.purchaseCreditPack(12, 'credits_100'), /already in progress/)
+  resolve({ transaction: { transactionIdentifier: 'order' } })
+  await buying
+  await assert.rejects(store.purchaseCreditPack(13, 'credits_100'), /Reload/)
 })
 
 test('concurrent loads configure once; changing accounts switches the RevenueCat identity', async () => {

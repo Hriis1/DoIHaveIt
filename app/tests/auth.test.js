@@ -91,6 +91,45 @@ test('successful sign-in stores only the session and wallet summary and restores
   assert.equal(calls[1][1].credentials, undefined)
 })
 
+test('explicit balance refresh persists server credits and notifies subscribers, retaining cache offline', async () => {
+  let offline = false
+  const f = fixture(async action => {
+    if (action === 'me' && offline) throw new Error('offline')
+    return { user: action === 'me' ? { ...user, credits: 600 } : user, token }
+  })
+  await f.auth.signIn('login', credentials)
+  const seen = []
+  f.auth.subscribeCreditBalance(value => seen.push(value.credits))
+  assert.equal((await f.auth.refreshCredits()).credits, 600)
+  assert.equal(f.cached.credits, 600)
+  assert.deepEqual(seen, [600])
+  offline = true
+  await assert.rejects(f.auth.refreshCredits(), /offline/)
+  assert.equal(f.cached.credits, 600)
+  assert.deepEqual(seen, [600])
+})
+
+test('a balance refresh cannot overwrite another account or a canceled session', async () => {
+  let resolve
+  const f = fixture(async action => action === 'me' ? new Promise(yes => { resolve = yes }) : { user, token })
+  await f.auth.signIn('login', credentials)
+  const refresh = f.auth.refreshCredits()
+  await new Promise(yes => setImmediate(yes))
+  await f.users.saveCurrentUser({ ...user, id: 5, credits: 20 })
+  resolve({ user: { ...user, credits: 1000 } })
+  await refresh
+  assert.equal(f.cached.id, 5)
+  assert.equal(f.cached.credits, 20)
+  await f.users.saveCurrentUser(user)
+  const controller = new AbortController()
+  const canceled = f.auth.refreshCredits({ signal: controller.signal })
+  await new Promise(yes => setImmediate(yes))
+  controller.abort()
+  resolve({ user: { ...user, credits: 1000 } })
+  await assert.rejects(canceled, { name: 'AbortError' })
+  assert.equal(f.cached.credits, user.credits)
+})
+
 test('expired sessions clear the wallet cache, while connection failures preserve offline access', async () => {
   let fail = false
   const f = fixture(async action => {

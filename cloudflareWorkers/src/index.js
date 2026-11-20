@@ -2,10 +2,15 @@ import { respond } from './http.js'
 import { handleCatalogDownload } from './routes/catalogs.js'
 import { handleProductLookup } from './routes/productLookup.js'
 import { handleAuth } from './routes/auth.js'
+import { handleRevenueCat, handlePurchaseStatus } from './routes/purchases.js'
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+
+    // Purchase notifications and authenticated confirmation
+    if (url.pathname === '/webhooks/revenuecat') return handleRevenueCat(request, env)
+    if (url.pathname === '/purchases/status') return handlePurchaseStatus(request, env)
 
     //Auth routes
     const auth = url.pathname.match(/^\/auth\/(register|login|me|logout)$/)

@@ -39,6 +39,12 @@ const screens = { collections: mountCollectionsScreen, collection: mountCollecti
 let unmountScreen
 let canAccessApp = false
 
+if (isNative) {
+  void App.addListener('appStateChange', ({ isActive }) => {
+    if (isActive && canAccessApp) void auth.refreshCredits().catch(() => {})
+  }).catch(error => console.warn('Could not register balance refresh:', error))
+}
+
 function showCreditBalance(user) {
   creditBadge.hidden = !user
   if (!user) return

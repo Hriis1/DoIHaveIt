@@ -15,6 +15,22 @@ export function createAuth({ api = requestAuth, tokens = { getSessionToken, save
 
   return {
     getCurrentUser: getUser,
+    async refreshCredits({ signal } = {}) {
+      const user = await getUser()
+      const token = await tokens.getSessionToken()
+      signal?.throwIfAborted()
+      if (!user || !token) throw new Error('Please log in again to refresh your balance.')
+      const result = await api('me', { token, signal })
+      signal?.throwIfAborted()
+      const current = await getUser()
+      if (current?.id !== user.id || result.user.id !== user.id || await tokens.getSessionToken() !== token) return
+      signal?.throwIfAborted()
+      const updated = { ...current, credits: result.user.credits }
+      if (isNative) await users.updateCurrentUserCredits(user.id, updated.credits)
+      else memoryUser = updated
+      for (const listener of creditListeners) listener(updated)
+      return updated
+    },
     subscribeCreditBalance(listener) {
       creditListeners.add(listener)
       return () => creditListeners.delete(listener)

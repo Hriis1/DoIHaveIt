@@ -25,7 +25,7 @@ async function setup(t) {
   const fixture = authFixture(t)
   fixture.database.exec(purchaseSchema)
   const { user, token } = await (await fixture.request('register', { body: credentials })).json()
-  const env = { ...fixture.env, REVENUECAT_APP_ID: 'app123', REVENUECAT_WEBHOOK_SECRET: 'test-secret', REVENUECAT_TEST_USER_IDS: '1' }
+  const env = { ...fixture.env, REVENUECAT_APP_ID: 'app123', REVENUECAT_WEBHOOK_SECRET: 'test-secret' }
   const event = { id: 'event1', type: 'NON_RENEWING_PURCHASE', app_id: 'app123', app_user_id: String(user.id),
     store: 'PLAY_STORE', environment: 'PRODUCTION', product_id: 'doihaveit_credits_100', transaction_id: 'order1' }
   const webhook = (changes = {}, bindings = env, authorization = 'Bearer test-secret') => worker.fetch(new Request('https://example.com/webhooks/revenuecat', {
@@ -76,16 +76,18 @@ test('refund before purchase is a tombstone and does not spend other credits', a
   assert.ok(purchase.refunded_at)
 })
 
-test('sandbox grants require the allowlist, but prior grants can still be refunded after removal', async t => {
+test('sandbox purchases grant any existing user credits and support duplicate protection and refunds', async t => {
   const f = await setup(t)
-  const noTests = { ...f.env, REVENUECAT_TEST_USER_IDS: '' }
-  await f.webhook({ environment: 'SANDBOX' }, noTests)
-  assert.equal(f.balance(), 0)
-  await f.webhook({ environment: 'SANDBOX' })
-  assert.equal(f.balance(), 100)
-  await f.webhook({ environment: 'SANDBOX', type: 'CANCELLATION' }, noTests)
-  assert.equal(f.balance(), 0)
-  await f.webhook({ environment: 'PRODUCTION' }, noTests)
+  const other = await (await f.request('register', { body: { ...credentials, email: 'tester@example.com' } })).json()
+  const purchase = { environment: 'SANDBOX', app_user_id: String(other.user.id) }
+  await f.webhook(purchase)
+  await f.webhook({ ...purchase, id: 'duplicate' })
+  const balance = () => f.database.prepare('SELECT credits FROM users WHERE id = ?').get(other.user.id).credits
+  assert.equal(balance(), 100)
+  await f.webhook({ ...purchase, type: 'CANCELLATION' })
+  await f.webhook({ ...purchase, type: 'CANCELLATION', id: 'duplicate-refund' })
+  assert.equal(balance(), 0)
+  await f.webhook({ environment: 'PRODUCTION' })
   assert.equal(f.balance(), 100)
 })
 

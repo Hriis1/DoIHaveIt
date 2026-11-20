@@ -1,13 +1,13 @@
 export function createPurchaseRepository(database) {
   return {
-    async processPurchase({ userId, store, environment, transactionId, productId, credits, refunded, allowGrant }) {
+    async processPurchase({ userId, store, environment, transactionId, productId, credits, refunded }) {
       const key = [store, environment, transactionId]
       // Every balance change and its processing marker commit or roll back together.
       const statements = [database.prepare(`
         INSERT INTO purchases (user_id, store, environment, transaction_id, product_id, credits, status)
-        SELECT ?, ?, ?, ?, ?, ?, ? WHERE ? OR ?
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (store, environment, transaction_id) DO NOTHING;
-      `).bind(userId, ...key, productId, credits, refunded ? 'refunded' : 'granted', refunded ? 1 : 0, allowGrant ? 1 : 0)]
+      `).bind(userId, ...key, productId, credits, refunded ? 'refunded' : 'granted')]
       const owner = 'store = ? AND environment = ? AND transaction_id = ? AND user_id = ? AND product_id = ?'
       const parameters = [...key, userId, productId]
       if (refunded) {
@@ -23,7 +23,7 @@ export function createPurchaseRepository(database) {
           UPDATE purchases SET status = 'refunded', refunded_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
           WHERE ${owner} AND refunded_at IS NULL;
         `).bind(...parameters))
-      } else if (allowGrant) {
+      } else {
         statements.push(database.prepare(`
           UPDATE users SET credits = credits + (
             SELECT credits FROM purchases WHERE ${owner}

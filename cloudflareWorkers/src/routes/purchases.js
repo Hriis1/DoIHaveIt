@@ -57,15 +57,12 @@ export async function handleRevenueCat(request, env) {
     return json({ error: 'Invalid purchase event.' }, 400)
   }
   const userId = Number(event.app_user_id)
-  const allowed = (env.REVENUECAT_TEST_USER_IDS ?? '').split(',').map(value => value.trim())
-  const allowGrant = event.environment === 'PRODUCTION' || allowed.includes(event.app_user_id)
-  if (!allowGrant && event.type === 'NON_RENEWING_PURCHASE') return json({ success: true })
   try {
     const repository = createPurchaseRepository(env.DB)
     if (!await repository.getUser(userId)) return json({ error: 'Purchase account not found.' }, 400)
     await repository.processPurchase({ userId, store: event.store, environment: event.environment,
       transactionId: event.transaction_id, productId: event.product_id, credits: productCredits[event.product_id],
-      refunded: event.type === 'CANCELLATION', allowGrant })
+      refunded: event.type === 'CANCELLATION' })
     return json({ success: true })
   } catch {
     console.error('Purchase webhook processing failed', { transactionId: event.transaction_id, userId, type: event.type })

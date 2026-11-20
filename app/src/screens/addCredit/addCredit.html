@@ -1,0 +1,18 @@
+<section class="add-credit-screen" aria-labelledby="add-credit-title">
+  <h1 id="add-credit-title">Add credit</h1>
+  <p class="credit-packs-description">Choose a credit pack for AI searches.</p>
+  <p class="credit-packs-status" role="status">Loading credit packs…</p>
+  <p class="credit-packs-error error" role="alert" hidden></p>
+  <button class="secondary-button credit-packs-retry" type="button" hidden>Try again</button>
+  <div class="credit-packs" aria-busy="true"></div>
+  <p class="credit-packs-note" hidden>Purchases will be available soon.</p>
+  <template class="credit-pack-template">
+    <article class="credit-pack">
+      <div class="credit-pack-details">
+        <svg aria-hidden="true"><use href="#icon-coins" /></svg>
+        <h2 class="credit-pack-title"></h2>
+      </div>
+      <button class="primary-button credit-pack-price" type="button" disabled></button>
+    </article>
+  </template>
+</section>

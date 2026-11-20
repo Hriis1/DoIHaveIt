@@ -134,7 +134,10 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     closeManualOptions()
     toggle.focus()
   })
-  listen(buyCredits, 'click', event => event.preventDefault())
+  listen(buyCredits, 'click', event => {
+    event.preventDefault()
+    navigate('add-credit')
+  })
 
   function discardDraft() {
     closeManualOptions()

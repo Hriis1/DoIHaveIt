@@ -1,0 +1,48 @@
+.credit-packs-description,
+.credit-packs-status,
+.credit-packs-note {
+  color: var(--muted);
+}
+
+.credit-packs {
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.credit-pack {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.credit-pack-details {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.credit-pack-details svg {
+  color: var(--accent);
+}
+
+.credit-pack-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.credit-pack-price {
+  flex-shrink: 0;
+}
+
+.credit-packs-note {
+  margin-top: 20px;
+  font-size: 13px;
+}

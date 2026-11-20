@@ -8,6 +8,7 @@ import { mountProductsScreen } from './screens/products/products.js'
 import { mountAiProviderScreen } from './screens/aiProvider/aiProvider.js'
 import { mountAuthScreen } from './screens/auth/auth.js'
 import { mountAccountScreen } from './screens/account/account.js'
+import { mountAddCreditScreen } from './screens/addCredit/addCredit.js'
 import { auth } from './modules/auth.js'
 import { prepareCatalogCache } from './modules/catalog/archive.js'
 import { App } from '@capacitor/app'
@@ -32,6 +33,7 @@ if (isNative) {
 }
 const screens = { collections: mountCollectionsScreen, collection: mountCollectionScreen, catalogs: mountCatalogsScreen, products: mountProductsScreen, 'ai-provider': mountAiProviderScreen,
   account: mountAccountScreen,
+  'add-credit': mountAddCreditScreen,
   login: (container, options) => mountAuthScreen(container, { ...options, mode: 'login' }),
   register: (container, options) => mountAuthScreen(container, { ...options, mode: 'register' }) }
 let unmountScreen

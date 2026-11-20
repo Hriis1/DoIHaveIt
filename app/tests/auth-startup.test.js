@@ -31,6 +31,7 @@ function mount(restoreSession) {
     mountCatalogsScreen: screen('catalogs'), mountProductsScreen: screen('products'),
     mountAiProviderScreen: screen('ai-provider'), mountAuthScreen: screen('auth'),
     mountAccountScreen: screen('account'),
+    mountAddCreditScreen: screen('add-credit'),
   }
   runInNewContext(source + '\nthis.show = showScreen', context)
   return { node, mounts, bannerVisibility, show: context.show, updateCredits: user => creditListener(user) }
@@ -79,4 +80,14 @@ test('startup errors offer retry or login without clearing local data', async ()
   app.node('.auth-retry').emit()
   await settle()
   assert.equal(app.mounts.at(-1).name, 'collections')
+})
+
+test('the add-credit route uses the authenticated app shell', async () => {
+  const app = mount(async () => ({ state: 'authenticated', user: { credits: 10 } }))
+  await settle()
+  app.show('add-credit')
+  assert.equal(app.mounts.at(-1).name, 'add-credit')
+  assert.equal(app.node('#app').dataset.screen, 'add-credit')
+  assert.equal(app.node('.app-menu').hidden, false)
+  assert.equal(app.bannerVisibility.at(-1), true)
 })

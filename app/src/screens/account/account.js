@@ -2,12 +2,15 @@ import './account.css'
 import html from './account.html?raw'
 import { auth } from '../../modules/auth.js'
 
-export function mountAccountScreen(container) {
+export function mountAccountScreen(container, { navigate }) {
   container.innerHTML = html
   const screen = container.querySelector('.account-screen')
   const status = screen.querySelector('.account-status')
   const error = screen.querySelector('.account-error')
   let active = true
+  const addCredit = () => navigate('add-credit')
+  const addButton = screen.querySelector('.primary-button')
+  addButton.addEventListener('click', addCredit)
 
   async function loadAccount() {
     try {
@@ -32,6 +35,7 @@ export function mountAccountScreen(container) {
   void loadAccount()
   return () => {
     active = false
+    addButton.removeEventListener('click', addCredit)
     screen.remove()
   }
 }

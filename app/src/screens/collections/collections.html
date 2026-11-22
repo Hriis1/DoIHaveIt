@@ -21,12 +21,13 @@
 
   <dialog id="add-dialog" aria-labelledby="add-title">
     <form id="add-form" class="sheet">
+      <button class="popup-close" data-popup-close type="button" aria-label="Close"><svg aria-hidden="true"><use href="#icon-close" /></svg></button>
       <h2 id="add-title">New collection</h2>
       <label for="collection-name">Collection name</label>
       <input id="collection-name" name="name" placeholder="e.g. Camping gear" autocomplete="off" required />
       <p id="add-error" class="error" role="alert" hidden></p>
       <div class="sheet-actions">
-        <button type="button" class="secondary-button" data-close="add-dialog">Cancel</button>
+        <button type="button" class="secondary-button" data-popup-close>Cancel</button>
         <button type="submit" class="primary-button">Create collection</button>
       </div>
     </form>
@@ -34,11 +35,12 @@
 
   <dialog id="delete-dialog" aria-labelledby="delete-title" aria-describedby="delete-description">
     <form id="delete-form" class="sheet">
+      <button class="popup-close" data-popup-close type="button" aria-label="Close"><svg aria-hidden="true"><use href="#icon-close" /></svg></button>
       <h2 id="delete-title">Delete collection?</h2>
       <p id="delete-description"></p>
       <p id="delete-error" class="error" role="alert" hidden></p>
       <div class="sheet-actions">
-        <button type="button" class="secondary-button" data-close="delete-dialog" autofocus>Keep collection</button>
+        <button type="button" class="secondary-button" data-popup-close autofocus>Keep collection</button>
         <button type="submit" class="danger-button">Delete</button>
       </div>
     </form>

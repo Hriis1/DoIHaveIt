@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
+import { createPopup } from '../src/modules/popup.js'
 
 // Exercise popup lifecycle without loading Vite's CSS and raw HTML imports
 const source = readFileSync(new URL('../src/screens/collection/collection.js', import.meta.url), 'utf8')
@@ -22,8 +23,13 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
       const attributes = new Map()
       nodes.set(selector, {
         hidden: false, disabled: false, open: false, textContent: '', value: '', children: [],
-        addEventListener: (event, handler) => listeners.set(event, handler),
-        emit(event = 'click', data = {}) { return listeners.get(event)?.({ target: this, preventDefault() {}, ...data }) },
+        addEventListener(event, handler) {
+          if (!listeners.has(event)) listeners.set(event, new Set())
+          listeners.get(event).add(handler)
+        },
+        removeEventListener: (event, handler) => listeners.get(event)?.delete(handler),
+        getBoundingClientRect: () => ({ left: 0, right: 400, top: 0, bottom: 600 }),
+        emit(event = 'click', data = {}) { for (const handler of listeners.get(event) ?? []) handler({ target: this, preventDefault() {}, ...data }) },
         setAttribute: (name, value) => attributes.set(name, value),
         getAttribute: name => attributes.get(name),
         focus() { this.focused = true },
@@ -59,7 +65,7 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
   let save = async (photo, insert) => { await insert('item-photos/saved.jpg'); deleted.push(photo) }
   let created = 0
   const context = {
-    html: '', AbortController, console: { error() {} },
+    html: '', createPopup, AbortController, console: { error() {} },
     document: { createElement: tag => node(`created-${tag}-${created++}`), createDocumentFragment: () => ({ isFragment: true, children: [],
       appendChild(child) { this.children.push(child) } }) },
     getProductByBarcode: async () => product,

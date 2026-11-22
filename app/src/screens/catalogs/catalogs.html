@@ -39,6 +39,7 @@
 
   <dialog class="catalog-operation-dialog" aria-labelledby="catalog-operation-title" aria-describedby="catalog-operation-status">
     <div class="sheet">
+      <button class="popup-close catalog-operation-close" data-popup-close type="button" aria-label="Close"><svg aria-hidden="true"><use href="#icon-close" /></svg></button>
       <h2 id="catalog-operation-title">Food &amp; drinks full</h2>
       <div class="catalog-operation-state">
         <span class="catalog-spinner" aria-hidden="true"></span>
@@ -50,10 +51,11 @@
 
   <dialog class="catalog-remove-dialog" aria-labelledby="catalog-remove-title" aria-describedby="catalog-remove-description">
     <div class="sheet">
+      <button class="popup-close catalog-remove-close" data-popup-close type="button" aria-label="Close"><svg aria-hidden="true"><use href="#icon-close" /></svg></button>
       <h2 id="catalog-remove-title">Remove catalog?</h2>
       <p id="catalog-remove-description">Remove Food &amp; drinks full? Products already used in your collections will be kept.</p>
       <div class="sheet-actions">
-        <button class="secondary-button catalog-remove-cancel" type="button">Cancel</button>
+        <button class="secondary-button catalog-remove-cancel" data-popup-close type="button">Cancel</button>
         <button class="danger-button catalog-remove-confirm" type="button">Remove</button>
       </div>
     </div>
@@ -63,7 +65,7 @@
     <div class="sheet">
       <header class="catalogs-help-heading">
         <h2 id="catalogs-help-title">What are catalogs?</h2>
-        <button class="catalogs-help-close" type="button" aria-label="Close explanation" autofocus><svg aria-hidden="true"><use href="#icon-close" /></svg></button>
+        <button class="popup-close catalogs-help-close" type="button" aria-label="Close explanation" autofocus><svg aria-hidden="true"><use href="#icon-close" /></svg></button>
       </header>
       <p id="catalogs-help-description">Catalogs are optional packs of product information. Add one to recognize its products without using tokens for AI calls</p>
       <p id="catalogs-help-size">The size shown estimates the space added to your local database.</p>

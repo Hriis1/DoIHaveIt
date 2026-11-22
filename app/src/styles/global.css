@@ -294,3 +294,27 @@ dialog::backdrop {
     padding-right: calc(16px + env(safe-area-inset-right));
   }
 }
+
+/* Popup content stays caller-owned; dismissal controls share one appearance. */
+dialog .sheet {
+  position: relative;
+}
+
+dialog .sheet h2 {
+  padding-right: 36px;
+}
+
+.popup-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+}

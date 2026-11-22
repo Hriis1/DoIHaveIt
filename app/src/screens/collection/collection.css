@@ -187,21 +187,6 @@
   padding: 20px 18px 22px;
 }
 
-.collection-screen .scan-result-close {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: var(--muted);
-}
-
 .collection-screen #scan-result-title {
   padding-right: 36px;
   overflow-wrap: anywhere;

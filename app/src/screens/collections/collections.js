@@ -1,5 +1,6 @@
 import './collections.css'
 import html from './collections.html?raw'
+import { createPopup } from '../../modules/popup.js'
 import { getCollections, addCollection, deleteCollection } from '../../repositories/collectionRepo.js'
 
 export function mountCollectionsScreen(container, { isNative, databaseReady, navigate }) {
@@ -25,6 +26,13 @@ export function mountCollectionsScreen(container, { isNative, databaseReady, nav
   const template = screen.querySelector('#collection-template')
   let selectedCollection
   let busy = false
+
+  const addPopup = createPopup(addDialog, {
+    closeButtons: [...addDialog.querySelectorAll('[data-popup-close]')], canClose: () => !busy,
+  })
+  const deletePopup = createPopup(deleteDialog, {
+    closeButtons: [...deleteDialog.querySelectorAll('[data-popup-close]')], canClose: () => !busy,
+  })
 
   function showError(element, text) {
     element.textContent = text
@@ -69,7 +77,7 @@ export function mountCollectionsScreen(container, { isNative, databaseReady, nav
           showError(deleteError, '')
           screen.querySelector('#delete-description').textContent =
             `“${collection.name}” will be removed. This cannot be undone.`
-          deleteDialog.showModal()
+          deletePopup.open()
         })
         return card
       })
@@ -91,7 +99,7 @@ export function mountCollectionsScreen(container, { isNative, databaseReady, nav
   listen(newButton, 'click', () => {
     addForm.reset()
     showError(addError, '')
-    addDialog.showModal()
+    addPopup.open()
     nameInput.focus()
   })
 
@@ -110,7 +118,8 @@ export function mountCollectionsScreen(container, { isNative, databaseReady, nav
     try {
       await addCollection(name)
       if (!active) return
-      addDialog.close()
+      setBusy(false)
+      addPopup.close()
       await loadCollections()
     } catch (error) {
       if (!active) return
@@ -132,7 +141,8 @@ export function mountCollectionsScreen(container, { isNative, databaseReady, nav
     try {
       await deleteCollection(selectedCollection.id)
       if (!active) return
-      deleteDialog.close()
+      setBusy(false)
+      deletePopup.close()
       await loadCollections()
       if (active) newButton.focus()
     } catch (error) {
@@ -142,33 +152,6 @@ export function mountCollectionsScreen(container, { isNative, databaseReady, nav
     } finally {
       setBusy(false)
     }
-  })
-
-  screen.querySelectorAll('[data-close]').forEach(button => {
-    listen(button, 'click', () => screen.querySelector(`#${button.dataset.close}`).close())
-  })
-
-  screen.querySelectorAll('dialog').forEach(dialog => {
-    let startedOutside = false
-    const isOutside = event => {
-      const bounds = dialog.getBoundingClientRect()
-      return event.clientX < bounds.left || event.clientX > bounds.right ||
-        event.clientY < bounds.top || event.clientY > bounds.bottom
-    }
-
-    // Treat backdrop taps as cancellation without closing on drags from inside
-    listen(dialog, 'pointerdown', event => {
-      startedOutside = event.target === dialog && isOutside(event)
-    })
-    listen(dialog, 'click', event => {
-      if (!busy && startedOutside && event.target === dialog && isOutside(event)) {
-        dialog.close()
-      }
-      startedOutside = false
-    })
-    listen(dialog, 'cancel', event => {
-      if (busy) event.preventDefault()
-    })
   })
 
   if (isNative) {
@@ -181,7 +164,8 @@ export function mountCollectionsScreen(container, { isNative, databaseReady, nav
   return () => {
     active = false
     events.abort()
-    screen.querySelectorAll('dialog').forEach(dialog => dialog.close())
+    addPopup.destroy()
+    deletePopup.destroy()
     screen.remove()
   }
 }

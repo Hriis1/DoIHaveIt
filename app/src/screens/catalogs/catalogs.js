@@ -1,5 +1,6 @@
 import './catalogs.css'
 import html from './catalogs.html?raw'
+import { createPopup } from '../../modules/popup.js'
 import { Catalog } from '../../modules/catalog/catalog.js'
 
 export function mountCatalogsScreen(container, { isNative = false, databaseReady = Promise.resolve() } = {}) {
@@ -29,6 +30,21 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
   let cancellable = true
   let controller
 
+  const helpPopup = createPopup(helpDialog, {
+    closeButtons: [screen.querySelector('.catalogs-help-close'), screen.querySelector('.catalogs-help-done')],
+  })
+  const removePopup = createPopup(removeDialog, {
+    closeButtons: [...removeDialog.querySelectorAll('[data-popup-close]')],
+  })
+  const operationPopup = createPopup(operationDialog, {
+    closeButtons: [cancel, screen.querySelector('.catalog-operation-close')],
+    canClose: () => {
+      if (!busy) return true
+      requestCancel()
+      return false
+    },
+  })
+
   function renderInstalled(entry, value) {
     entry.installed = value
     entry.installedLabel.hidden = !value
@@ -52,7 +68,7 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
 
   async function runOperation(entry, remove) {
     if (busy) return
-    removeDialog.close()
+    removePopup.close()
     errorMessage.hidden = true
     busy = true
     controller = new AbortController()
@@ -60,7 +76,7 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
     cancel.textContent = 'Cancel'
     spinner.hidden = false
     onProgress('preparing')
-    operationDialog.showModal()
+    operationPopup.open()
     try {
       await databaseReady
       await entry.catalog[remove ? 'down' : 'up']({ signal: controller.signal, onProgress, compressed: entry.compressed })
@@ -80,19 +96,13 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
   }
 
   function requestCancel() {
-    if (!busy) operationDialog.close()
+    if (!busy) operationPopup.close()
     else if (cancellable) {
       onProgress('cancelling')
       controller.abort()
     }
   }
 
-  listen(cancel, 'click', requestCancel)
-  listen(operationDialog, 'cancel', event => {
-    event.preventDefault()
-    requestCancel()
-  })
-  listen(screen.querySelector('.catalog-remove-cancel'), 'click', () => removeDialog.close())
   listen(screen.querySelector('.catalog-remove-confirm'), 'click', () => runOperation(selectedCatalog, true))
 
   for (const entry of catalogs) {
@@ -106,7 +116,7 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
       selectedCatalog = entry
       if (entry.installed) {
         screen.querySelector('#catalog-remove-description').textContent = `Remove ${entry.name}? Products already used in your collections will be kept.`
-        removeDialog.showModal()
+        removePopup.open()
       } else runOperation(entry, false)
     })
 
@@ -131,31 +141,14 @@ export function mountCatalogsScreen(container, { isNative = false, databaseReady
     })
   }
 
-  listen(screen.querySelector('.catalogs-help'), 'click', () => helpDialog.showModal())
-  listen(screen.querySelector('.catalogs-help-close'), 'click', () => helpDialog.close())
-  listen(screen.querySelector('.catalogs-help-done'), 'click', () => helpDialog.close())
-
-  // Match the other screens' backdrop dismissal without closing on drags from inside
-  let startedOutside = false
-  const isOutside = event => {
-    const bounds = helpDialog.getBoundingClientRect()
-    return event.clientX < bounds.left || event.clientX > bounds.right ||
-      event.clientY < bounds.top || event.clientY > bounds.bottom
-  }
-  listen(helpDialog, 'pointerdown', event => {
-    startedOutside = event.target === helpDialog && isOutside(event)
-  })
-  listen(helpDialog, 'click', event => {
-    if (startedOutside && event.target === helpDialog && isOutside(event)) helpDialog.close()
-    startedOutside = false
-  })
+  listen(screen.querySelector('.catalogs-help'), 'click', () => helpPopup.open())
 
   return () => {
     active = false
     events.abort()
-    helpDialog.close()
-    operationDialog.close()
-    removeDialog.close()
+    helpPopup.destroy()
+    operationPopup.destroy()
+    removePopup.destroy()
     screen.remove()
   }
 }

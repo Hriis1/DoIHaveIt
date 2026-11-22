@@ -1,5 +1,6 @@
 import './collection.css'
 import html from './collection.html?raw'
+import { createPopup } from '../../modules/popup.js'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 import { getCollectionItems, addCollectionItem } from '../../repositories/itemRepo.js'
@@ -85,18 +86,17 @@ export function mountCollectionScreen(container, { collection, isNative, databas
 
   title.textContent = collection.name
   listen(screen.querySelector('.collection-back'), 'click', () => navigate('collections'))
-  listen(scanResultClose, 'click', closeScanResult)
-  listen(scanResultDismiss, 'click', closeScanResult)
-  listen(scanResultDialog, 'cancel', event => {
-    event.preventDefault()
-    if (openSelect) {
+  const scanResultPopup = createPopup(scanResultDialog, {
+    closeButtons: [scanResultClose, scanResultDismiss],
+    canClose: () => !draft?.saving,
+    onClose: discardDraft,
+    onCancel: () => {
+      if (!openSelect) return
       const toggle = openSelect.toggle
       closeManualOptions()
       toggle.focus()
-    } else closeScanResult()
-  })
-  listen(scanResultDialog, 'close', () => {
-    if (!scanResultDialog.open) discardDraft()
+      return false
+    },
   })
   listen(photoCamera, 'click', () => void choosePhoto('camera'))
   listen(photoGallery, 'click', () => void choosePhoto('gallery'))
@@ -151,9 +151,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   }
 
   function closeScanResult() {
-    if (draft?.saving) return
-    discardDraft()
-    scanResultDialog.close()
+    scanResultPopup.close()
   }
 
   function updatePhotoControls(session) {
@@ -421,7 +419,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     showManualFields(false)
     scanResultTitle.textContent = 'Looking up product…'
     scanResultBarcode.textContent = `Barcode: ${barcode}`
-    scanResultDialog.showModal()
+    scanResultPopup.open()
     try {
       await databaseReady
       if (!active || currentScan !== scanRequest) return
@@ -536,7 +534,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     discardDraft()
     events.abort()
     void scanner.destroy()
-    scanResultDialog.close()
+    scanResultPopup.destroy()
     screen.remove()
   }
 }

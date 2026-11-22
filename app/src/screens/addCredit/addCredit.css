@@ -46,3 +46,56 @@
   margin-top: 20px;
   font-size: 13px;
 }
+
+.credit-result-dialog {
+  inset: 0;
+  margin: auto;
+  width: min(400px, calc(100% - 40px));
+  height: fit-content;
+  border-radius: 20px;
+}
+
+.credit-result-dialog .sheet {
+  padding: 58px 22px 28px;
+}
+
+.credit-result-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+#credit-result-message {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.credit-result-icon {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  color: var(--danger);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.credit-result-dialog[data-result="granted"] .credit-result-icon {
+  color: #248a4b;
+}
+
+.credit-result-dialog[open] .credit-result-symbol {
+  stroke-dasharray: 1;
+  animation: credit-result-draw 450ms ease-out both;
+}
+
+@keyframes credit-result-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .credit-result-dialog[open] .credit-result-symbol {
+    animation: none;
+  }
+}

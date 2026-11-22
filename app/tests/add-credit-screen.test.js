@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
+import { createPopup } from '../src/modules/popup.js'
 
 const source = readFileSync(new URL('../src/screens/addCredit/addCredit.js', import.meta.url), 'utf8')
   .replace(/^import .*\r?\n/gm, '').replace('export function mountAddCreditScreen', 'function mountAddCreditScreen')
@@ -13,10 +14,13 @@ function mount(load, { purchase = async () => ({ status: 'cancelled' }), status 
     if (!nodes.has(selector)) {
       const listeners = new Map()
       nodes.set(selector, {
-        hidden: false, textContent: '', children: [], attributes: {},
+        hidden: false, open: false, textContent: '', children: [], attributes: {},
         addEventListener: (name, handler) => listeners.set(name, handler),
         removeEventListener: name => listeners.delete(name),
-        emit: () => listeners.get('click')?.(),
+        emit(type = 'click', data = {}) { return listeners.get(type)?.({ target: this, preventDefault() {}, ...data }) },
+        showModal() { this.open = true },
+        close() { this.open = false; this.emit('close') },
+        getBoundingClientRect: () => ({ left: 10, top: 10, right: 400, bottom: 300 }),
         setAttribute(name, value) { this.attributes[name] = value },
         replaceChildren(...children) { this.children = children },
         remove() {},
@@ -48,7 +52,7 @@ function mount(load, { purchase = async () => ({ status: 'cancelled' }), status 
   let pending
   let currentId = 'wallet'
   let timer
-  const context = { html: '', AbortController, AbortSignal: { timeout: () => deadline.signal, any: AbortSignal.any },
+  const context = { html: '', createPopup, AbortController, AbortSignal: { timeout: () => deadline.signal, any: AbortSignal.any },
     setTimeout: manualTimer ? callback => { timer = callback; return 1 } : setTimeout,
     clearTimeout: manualTimer ? () => { timer = undefined } : clearTimeout,
     auth: { getCurrentUser: async () => ({ id: currentId }), refreshCredits: async () => ({ id: currentId }),
@@ -105,7 +109,13 @@ test('purchase confirmation updates the wallet once and duplicate clicks cannot 
   resolve({ status: 'purchased', transactionId: 'order' })
   await settle()
   assert.deepEqual(ui.balances, [['wallet', 100]])
-  assert.equal(ui.node('.credit-packs-note').textContent, 'Credits added to your account.')
+  assert.equal(ui.node('.credit-packs-note').hidden, true)
+  assert.equal(ui.node('#credit-result-message').textContent, 'Credits added to your account.')
+  assert.equal(ui.node('.credit-result-dialog').attributes['data-result'], 'granted')
+  assert.equal(ui.node('.credit-result-symbol').attributes.d, 'M6 12l4 4 8-8')
+  assert.equal(ui.node('.credit-result-dialog').open, true)
+  ui.node('.credit-result-close').emit()
+  assert.equal(ui.node('.credit-result-dialog').open, false)
   ui.unmount()
 })
 
@@ -119,6 +129,7 @@ test('cancellation, pending payment and failure never grant credits locally', as
     ui.buy()
     await settle()
     assert.deepEqual(ui.balances, [])
+    assert.equal(ui.node('.credit-result-dialog').open, false)
     if (outcome === 'pending') assert.match(ui.node('.credit-packs-note').textContent, /pending/)
     if (outcome === 'failure') assert.equal(ui.node('.credit-packs-error').hidden, false)
     ui.unmount()
@@ -166,6 +177,7 @@ test('account changes prevent purchase and leaving aborts pending confirmation',
   resolve({ status: 'granted', credits: 100 })
   await settle()
   assert.deepEqual(ui.balances, [])
+  assert.equal(ui.node('.credit-result-dialog').open, false)
 })
 
 test('confirmation deadline allows a later check and ignores late success', async () => {
@@ -190,7 +202,14 @@ test('a refunded transaction updates the balance and reports the refund', async 
   ui.buy()
   await settle()
   assert.deepEqual(ui.balances, [['wallet', 0]])
-  assert.match(ui.node('.credit-packs-note').textContent, /refunded/)
+  assert.equal(ui.node('.credit-packs-note').hidden, true)
+  assert.equal(ui.node('#credit-result-message').textContent, 'This purchase was refunded.')
+  assert.equal(ui.node('.credit-result-dialog').attributes['data-result'], 'refunded')
+  assert.equal(ui.node('.credit-result-symbol').attributes.d, 'M7 7l10 10M17 7L7 17')
+  assert.equal(ui.node('.credit-result-dialog').open, true)
+  ui.node('.credit-result-dialog').emit('pointerdown', { clientX: 0, clientY: 0 })
+  ui.node('.credit-result-dialog').emit('click', { clientX: 0, clientY: 0 })
+  assert.equal(ui.node('.credit-result-dialog').open, false)
   ui.unmount()
 })
 

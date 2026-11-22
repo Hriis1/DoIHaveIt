@@ -3,6 +3,7 @@ import html from './addCredit.html?raw'
 import { auth } from '../../modules/auth.js'
 import { getCreditPacks, purchaseCreditPack, isPurchasing, getPendingPurchase, clearPendingPurchase } from '../../modules/creditPacks.js'
 import { getPurchaseStatus } from '../../modules/purchaseApi.js'
+import { createPopup } from '../../modules/popup.js'
 
 export function mountAddCreditScreen(container) {
   container.innerHTML = html
@@ -14,6 +15,12 @@ export function mountAddCreditScreen(container) {
   const template = screen.querySelector('.credit-pack-template')
   const note = screen.querySelector('.credit-packs-note')
   const check = screen.querySelector('.credit-packs-check')
+  const resultDialog = screen.querySelector('.credit-result-dialog')
+  const resultMessage = screen.querySelector('#credit-result-message')
+  const resultSymbol = screen.querySelector('.credit-result-symbol')
+  const resultPopup = createPopup(resultDialog, {
+    closeButtons: [screen.querySelector('.credit-result-close')],
+  })
   const events = new AbortController()
   const buttons = []
   let userId
@@ -55,7 +62,11 @@ export function mountAddCreditScreen(container) {
           await auth.updateCredits(userId, result.credits)
           if (!active) return
           clearPendingPurchase(userId, transactionId)
-          showNote(result.status === 'granted' ? 'Credits added to your account.' : 'This purchase was refunded.')
+          note.hidden = true
+          resultMessage.textContent = result.status === 'granted' ? 'Credits added to your account.' : 'This purchase was refunded.'
+          resultDialog.setAttribute('data-result', result.status)
+          resultSymbol.setAttribute('d', result.status === 'granted' ? 'M6 12l4 4 8-8' : 'M7 7l10 10M17 7L7 17')
+          resultPopup.open()
           return
         }
         await new Promise((resolve, reject) => {
@@ -141,6 +152,7 @@ export function mountAddCreditScreen(container) {
     events.abort()
     retry.removeEventListener('click', loadPacks)
     check.removeEventListener('click', confirmPurchase)
+    resultPopup.destroy()
     screen.remove()
   }
 }

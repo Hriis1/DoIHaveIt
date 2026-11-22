@@ -50,7 +50,7 @@ function showCreditBalance(user) {
   if (!user) return
   const amount = user.credits.toLocaleString()
   creditBadge.querySelector('.credit-amount').textContent = amount
-  creditBadge.ariaLabel = `Credit balance: ${amount}`
+  creditBadge.ariaLabel = `Credit balance: ${amount}. Add credit`
 }
 
 auth.subscribeCreditBalance(showCreditBalance)
@@ -98,6 +98,7 @@ export function showScreen(name, parameters = {}) {
 }
 
 document.querySelector('.brand').addEventListener('click', () => showScreen('collections'))
+creditBadge.addEventListener('click', () => showScreen('add-credit'))
 
 async function startSession() {
   appMenu.hidden = true

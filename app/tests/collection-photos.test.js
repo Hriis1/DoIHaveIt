@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
 import { createPopup } from '../src/modules/popup.js'
+import { dismissActiveOverlay } from '../src/modules/navigation.js'
 
 // Exercise popup lifecycle without loading Vite's CSS and raw HTML imports
 const source = readFileSync(new URL('../src/screens/collection/collection.js', import.meta.url), 'utf8')
@@ -593,6 +594,35 @@ test('replacement deletes the discarded draft, picker cancellation retains it, a
   await settle()
   assert.deepEqual(ui.deleted, [first, second])
   assert.equal(ui.node('.scan-result-dialog').open, false)
+})
+
+test('Android Back cleans scan photos and aborts AI lookup without applying late results', async () => {
+  const photoUi = popup()
+  await photoUi.scan()
+  const photo = { path: 'back.jpg', webPath: 'preview' }
+  photoUi.select(async () => photo)
+  photoUi.node('.scan-photo-gallery').emit()
+  await settle()
+  assert.equal(dismissActiveOverlay(), true)
+  await settle()
+  assert.equal(photoUi.node('.scan-result-dialog').open, false)
+  assert.deepEqual(photoUi.deleted, [photo])
+  photoUi.unmount()
+
+  const aiUi = popup({ product: null })
+  await aiUi.scan()
+  const lookup = deferred()
+  let signal
+  aiUi.ai((_barcode, options) => { signal = options.signal; return lookup.promise })
+  aiUi.node('.scan-result-ai-search').emit()
+  await settle()
+  assert.equal(dismissActiveOverlay(), true)
+  assert.equal(signal.aborted, true)
+  lookup.resolve({ brand: 'late', name: 'product', size: null })
+  await settle()
+  assert.deepEqual(aiUi.resolved, [])
+  assert.equal(aiUi.node('.scan-result-dialog').open, false)
+  aiUi.unmount()
 })
 
 test('late picker results after closing or leaving the screen are deleted', async () => {

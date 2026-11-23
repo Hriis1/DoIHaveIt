@@ -2,12 +2,13 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { runInNewContext } from 'node:vm'
+import { createNavigation, dismissActiveOverlay, registerBackHandler } from '../src/modules/navigation.js'
 
 const source = readFileSync(new URL('../src/main.js', import.meta.url), 'utf8')
   .replace(/^import .*\r?\n/gm, '').replace('export function showScreen', 'function showScreen')
 const settle = () => new Promise(resolve => setImmediate(resolve))
 
-function mount(restoreSession) {
+function mount(restoreSession, platform = 'web') {
   const nodes = new Map()
   function node(selector) {
     if (!nodes.has(selector)) {
@@ -22,11 +23,17 @@ function mount(restoreSession) {
   const mounts = []
   const bannerVisibility = []
   let creditListener
+  const nativeEvents = new Map()
+  let exits = 0
   const screen = name => (_container, options) => { mounts.push({ name, options }); return () => {} }
   const context = {
+    createNavigation, dismissActiveOverlay,
+    App: { addListener: async (name, handler) => { nativeEvents.set(name, handler); return { remove() {} } },
+      exitApp: async () => { exits++ } },
+    initializeDatabase: async () => ({}), prepareCatalogCache: async () => {}, preparePhotoCache: async () => {},
     bannerAds: { setEnabled: async value => bannerVisibility.push(value) },
     document: { querySelector: node, addEventListener() {} }, window: { scrollTo() {} },
-    Capacitor: { isNativePlatform: () => false }, auth: { restoreSession, subscribeCreditBalance(listener) { creditListener = listener } },
+    Capacitor: { isNativePlatform: () => platform !== 'web', getPlatform: () => platform }, auth: { restoreSession, subscribeCreditBalance(listener) { creditListener = listener } },
     mountCollectionsScreen: screen('collections'), mountCollectionScreen: screen('collection'),
     mountCatalogsScreen: screen('catalogs'), mountProductsScreen: screen('products'),
     mountAiProviderScreen: screen('ai-provider'), mountAuthScreen: screen('auth'),
@@ -34,7 +41,8 @@ function mount(restoreSession) {
     mountAddCreditScreen: screen('add-credit'),
   }
   runInNewContext(source + '\nthis.show = showScreen', context)
-  return { node, mounts, bannerVisibility, show: context.show, updateCredits: user => creditListener(user) }
+  return { node, mounts, bannerVisibility, show: context.show, updateCredits: user => creditListener(user),
+    nativeEvents, exits: () => exits, back: () => mounts.at(-1).options.goBack() }
 }
 
 test('startup requires login without a session and gates the app shell until authentication succeeds', async () => {
@@ -90,4 +98,64 @@ test('the add-credit route uses the authenticated app shell', async () => {
   assert.equal(app.node('#app').dataset.screen, 'add-credit')
   assert.equal(app.node('.app-menu').hidden, false)
   assert.equal(app.bannerVisibility.at(-1), true)
+})
+
+test('Android Back restores collection parameters, closes menus first and leaves only at the root', async () => {
+  const app = mount(async () => ({ state: 'authenticated', user: { credits: 10 } }), 'android')
+  await settle()
+  const back = app.nativeEvents.get('backButton')
+  assert.equal(typeof back, 'function')
+  const collection = { id: 7, name: 'Drinks' }
+  app.show('collection', { collection })
+  app.show('add-credit')
+  app.node('.app-menu').open = true
+  back()
+  assert.equal(app.node('.app-menu').open, false)
+  assert.equal(app.mounts.at(-1).name, 'add-credit')
+  let dismissals = 0
+  const release = registerBackHandler(() => dismissals++)
+  back()
+  assert.equal(dismissals, 1)
+  assert.equal(app.mounts.at(-1).name, 'add-credit')
+  release()
+  back()
+  assert.equal(app.mounts.at(-1).name, 'collection')
+  assert.equal(app.mounts.at(-1).options.collection.id, 7)
+  assert.equal(app.exits(), 0)
+  back()
+  assert.equal(app.mounts.at(-1).name, 'collections')
+  back()
+  assert.equal(app.exits(), 1)
+})
+
+test('authentication clears login/register history and returning home clears protected history', async () => {
+  const app = mount(async () => ({ state: 'login' }), 'android')
+  await settle()
+  app.show('register')
+  app.back()
+  assert.equal(app.mounts.at(-1).options.mode, 'login')
+  app.show('register')
+  app.mounts.at(-1).options.onAuthenticated({ credits: 0 })
+  app.show('collections')
+  app.back()
+  assert.equal(app.exits(), 1)
+  assert.equal(app.mounts.at(-1).name, 'collections')
+  app.show('account')
+  app.node('.credit-badge').emit()
+  app.back()
+  assert.equal(app.mounts.at(-1).name, 'account')
+  app.node('.brand').emit()
+  app.back()
+  assert.equal(app.exits(), 2)
+})
+
+test('iOS uses shared history without registering Android Back or exiting the app', async () => {
+  const app = mount(async () => ({ state: 'authenticated', user: { credits: 0 } }), 'ios')
+  await settle()
+  assert.equal(app.nativeEvents.has('backButton'), false)
+  app.show('account')
+  app.back()
+  assert.equal(app.mounts.at(-1).name, 'collections')
+  app.back()
+  assert.equal(app.exits(), 0)
 })

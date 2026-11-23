@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createPopup } from '../src/modules/popup.js'
+import { dismissActiveOverlay } from '../src/modules/navigation.js'
 
 class Dialog extends EventTarget {
   open = false
@@ -98,4 +99,30 @@ test('destroy closes even while saving and removes listeners without repeated cl
   assert.equal(closed, 1)
   assert.equal(guards, 0)
   assert.equal(dialog.emit('cancel').defaultPrevented, false)
+})
+
+test('Android Back uses the popup cancel rules and never bypasses a save guard', () => {
+  const dialog = new Dialog()
+  let dropdownOpen = true
+  let saving = true
+  let cleanups = 0
+  const popup = createPopup(dialog, {
+    canClose: () => !saving,
+    onClose: () => cleanups++,
+    onCancel: () => { if (dropdownOpen) { dropdownOpen = false; return false } },
+  })
+  popup.open()
+  assert.equal(dismissActiveOverlay(), true)
+  assert.equal(dropdownOpen, false)
+  assert.equal(dialog.open, true)
+  assert.equal(dismissActiveOverlay(), true)
+  assert.equal(dialog.open, true)
+  saving = false
+  assert.equal(dismissActiveOverlay(), true)
+  assert.equal(dialog.open, false)
+  assert.equal(cleanups, 1)
+  assert.equal(dismissActiveOverlay(), false)
+  popup.open()
+  popup.destroy()
+  assert.equal(dismissActiveOverlay(), false)
 })

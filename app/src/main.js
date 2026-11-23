@@ -14,6 +14,7 @@ import { prepareCatalogCache } from './modules/catalog/archive.js'
 import { App } from '@capacitor/app'
 import { preparePhotoCache, discardCameraResult } from './modules/itemPhotos.js'
 import { bannerAds } from './modules/bannerAds.js'
+import { createNavigation, dismissActiveOverlay } from './modules/navigation.js'
 
 const app = document.querySelector('#app')
 const container = document.querySelector('#screen-content')
@@ -38,6 +39,12 @@ const screens = { collections: mountCollectionsScreen, collection: mountCollecti
   register: (container, options) => mountAuthScreen(container, { ...options, mode: 'register' }) }
 let unmountScreen
 let canAccessApp = false
+const navigation = createNavigation(renderScreen)
+
+if (Capacitor.getPlatform() === 'android') {
+  void App.addListener('backButton', goBack)
+    .catch(error => console.warn('Could not register Android Back navigation:', error))
+}
 
 if (isNative) {
   void App.addListener('appStateChange', ({ isActive }) => {
@@ -79,8 +86,29 @@ for (const button of appMenu.querySelectorAll('[data-screen]')) {
 export function showScreen(name, parameters = {}) {
   const isAuth = name === 'login' || name === 'register'
   if (!isAuth && !canAccessApp) return
+  if (!screens[name]) throw new Error(`Unknown screen: ${name}`)
+  // Collections is the app root; entering authentication discards protected routes.
+  const reset = name === 'collections' || (isAuth && canAccessApp)
+  if (isAuth && canAccessApp) canAccessApp = false
+  navigation.navigate(name, parameters, { reset })
+}
+
+function goBack() {
+  if (dismissActiveOverlay()) return
+  if (appMenu.open) {
+    appMenu.open = false
+    appMenu.querySelector('summary').focus()
+    return
+  }
+  if (navigation.goBack()) return
+  if (app.dataset.screen && Capacitor.getPlatform() === 'android') {
+    void App.exitApp().catch(error => console.warn('Could not leave the app:', error))
+  }
+}
+
+function renderScreen(name, parameters) {
+  const isAuth = name === 'login' || name === 'register'
   const mountScreen = screens[name]
-  if (!mountScreen) throw new Error(`Unknown screen: ${name}`)
 
   if (unmountScreen) unmountScreen()
   appMenu.open = false
@@ -89,8 +117,9 @@ export function showScreen(name, parameters = {}) {
   document.querySelector('.brand').disabled = isAuth
   app.dataset.screen = name
   void bannerAds.setEnabled(!isAuth)
-  unmountScreen = mountScreen(container, { ...parameters, isNative, databaseReady, navigate: showScreen,
+  unmountScreen = mountScreen(container, { ...parameters, isNative, databaseReady, navigate: showScreen, goBack,
     onAuthenticated: user => {
+      navigation.clear()
       canAccessApp = true
       showCreditBalance(user)
     } })
@@ -101,6 +130,7 @@ document.querySelector('.brand').addEventListener('click', () => showScreen('col
 creditBadge.addEventListener('click', () => showScreen('add-credit'))
 
 async function startSession() {
+  navigation.clear()
   appMenu.hidden = true
   document.querySelector('.brand').disabled = true
   container.innerHTML = '<section class="auth-startup"><p role="status">Checking your session…</p></section>'

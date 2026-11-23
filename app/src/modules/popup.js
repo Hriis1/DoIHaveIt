@@ -1,9 +1,12 @@
+import { registerBackHandler } from './navigation.js'
+
 // The caller supplies the dialog content and any screen-specific closing rules.
 export function createPopup(dialog, { closeButtons = [], canClose = () => true, onClose = () => {}, onCancel } = {}) {
   const listeners = []
   let startedOutside = false
   let disposed = false
   let notified = true
+  let releaseBack
   const listen = (element, event, handler) => {
     element.addEventListener(event, handler)
     listeners.push(() => element.removeEventListener(event, handler))
@@ -18,7 +21,13 @@ export function createPopup(dialog, { closeButtons = [], canClose = () => true, 
   function notifyClosed() {
     if (notified || dialog.open) return
     notified = true
+    releaseBack?.()
+    releaseBack = undefined
     onClose()
+  }
+
+  function cancel() {
+    if (onCancel?.() !== false) close()
   }
 
   listen(dialog, 'close', notifyClosed)
@@ -40,7 +49,7 @@ export function createPopup(dialog, { closeButtons = [], canClose = () => true, 
   })
   listen(dialog, 'cancel', event => {
     event.preventDefault()
-    if (onCancel?.() !== false) close()
+    cancel()
   })
   for (const button of closeButtons) listen(button, 'click', close)
 
@@ -50,11 +59,14 @@ export function createPopup(dialog, { closeButtons = [], canClose = () => true, 
       startedOutside = false
       notified = false
       dialog.showModal()
+      releaseBack = registerBackHandler(cancel)
     },
     close,
     destroy() {
       if (disposed) return
       disposed = true
+      releaseBack?.()
+      releaseBack = undefined
       for (const remove of listeners) remove()
       if (dialog.open) {
         dialog.close()

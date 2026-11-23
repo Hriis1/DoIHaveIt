@@ -3,6 +3,7 @@ import html from './scan.html?raw'
 import { Capacitor } from '@capacitor/core'
 import { BarcodeScanner, LensFacing } from '@capacitor-mlkit/barcode-scanning'
 import { bannerAds } from '../bannerAds.js'
+import { registerBackHandler } from '../navigation.js'
 
 export function createScanner({ onScan, onError }) {
   let current
@@ -72,8 +73,10 @@ export function createScanner({ onScan, onError }) {
         session.overlay.close()
         session.overlay.remove()
         document.documentElement.classList.remove('scan-active')
-        await session.resumeBanner?.()
-        current = undefined
+        try { await session.resumeBanner?.() } finally {
+          session.releaseBack?.()
+          current = undefined
+        }
       }
       if (disposed) return
       if (error) onError(error.message)
@@ -144,6 +147,7 @@ export function createScanner({ onScan, onError }) {
     }, options)
     document.body.append(overlay)
     overlay.showModal()
+    session.releaseBack = registerBackHandler(() => { void finish(session) })
     session.ready = start(session)
     session.ready.catch(error => {
       if (!session.closed) void finish(session, undefined, new Error(error.message || 'Could not start the scanner. Please try again.'))

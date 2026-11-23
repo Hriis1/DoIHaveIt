@@ -38,3 +38,12 @@ export async function getCollectionItems(collectionId, { search, page, pageSize 
     return { items: values ?? [], total, page: currentPage, totalPages }
   })
 }
+
+export async function removeCollectionItem(collectionId, itemId) {
+  return withDatabaseAccess(async database => {
+    const { values } = await database.query('SELECT image FROM items WHERE id = ? AND collection_id = ?;', [itemId, collectionId])
+    if (!values?.length) return null
+    await database.run('DELETE FROM items WHERE id = ? AND collection_id = ?;', [itemId, collectionId])
+    return values[0].image
+  })
+}

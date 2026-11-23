@@ -97,11 +97,30 @@
   </dialog>
 
   <template class="item-template">
-    <figure class="gallery-item">
-      <div class="item-image">
+    <button class="item-open" type="button">
+      <figure class="gallery-item">
+        <div class="item-image">
+          <span class="image-placeholder"><svg aria-hidden="true"><use href="#icon-image" /></svg></span>
+        </div>
+        <figcaption class="item-label"></figcaption>
+      </figure>
+    </button>
+  </template>
+
+  <dialog class="item-detail-dialog" aria-labelledby="item-detail-title">
+    <div class="sheet">
+      <button class="popup-close item-detail-close" type="button" aria-label="Close product details"><svg aria-hidden="true"><use href="#icon-close" /></svg></button>
+      <div class="item-image item-detail-image">
         <span class="image-placeholder"><svg aria-hidden="true"><use href="#icon-image" /></svg></span>
       </div>
-      <figcaption class="item-label"></figcaption>
-    </figure>
-  </template>
+      <h2 id="item-detail-title">Product details</h2>
+      <dl class="item-detail-fields">
+        <div><dt>Brand</dt><dd class="item-detail-brand"></dd></div>
+        <div><dt>Name</dt><dd class="item-detail-name"></dd></div>
+        <div class="item-detail-size-row"><dt>Size</dt><dd class="item-detail-size"></dd></div>
+      </dl>
+      <p class="error item-detail-error" role="alert" hidden></p>
+      <button class="danger-button item-detail-remove" type="button">Remove from collection</button>
+    </div>
+  </dialog>
 </section>

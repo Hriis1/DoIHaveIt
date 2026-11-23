@@ -7,6 +7,13 @@ const savedFolder = 'item-photos'
 const temporaryOptions = path => ({ path, directory: Directory.Cache })
 let cacheReady
 
+export async function deleteSavedItemPhoto(path) {
+  if (!path) return
+  // Only delete app-owned copies, never gallery originals or unrelated files.
+  if (!/^item-photos\/[a-z0-9_-]+\.[a-z0-9]{1,8}$/i.test(path)) throw new Error('Invalid saved item photo path.')
+  await Filesystem.deleteFile({ path, directory: Directory.Data })
+}
+
 async function ensureDirectory(path, directory) {
   try {
     await Filesystem.mkdir({ path, directory, recursive: true })

@@ -3,10 +3,10 @@ import html from './collection.html?raw'
 import { createPopup } from '../../modules/popup.js'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
-import { getCollectionItems, addCollectionItem } from '../../repositories/itemRepo.js'
+import { getCollectionItems, addCollectionItem, removeCollectionItem } from '../../repositories/itemRepo.js'
 import { getProductByBarcode, getProductBrands, getProductNames, getProductSizes, isProductInCollection, resolveProduct, resolveAiProduct } from '../../repositories/productRepo.js'
 import { createScanner } from '../../modules/scan/scan.js'
-import { selectItemPhoto, deleteTemporaryPhoto, saveItemPhoto } from '../../modules/itemPhotos.js'
+import { selectItemPhoto, deleteTemporaryPhoto, saveItemPhoto, deleteSavedItemPhoto } from '../../modules/itemPhotos.js'
 import { lookupProductWithAi } from '../../modules/aiProductLookup.js'
 
 const pageSize = 12
@@ -72,6 +72,19 @@ export function mountCollectionScreen(container, { collection, isNative, databas
   let scanRequest = 0
   let page = 1
   let collectionTotal
+  const itemDialog = screen.querySelector('.item-detail-dialog')
+  const itemPicture = screen.querySelector('.item-detail-image')
+  const itemPlaceholder = itemPicture.querySelector('.image-placeholder')
+  const itemClose = screen.querySelector('.item-detail-close')
+  const itemRemove = screen.querySelector('.item-detail-remove')
+  const itemError = screen.querySelector('.item-detail-error')
+  let selectedItem
+  let removing = false
+  const itemPopup = createPopup(itemDialog, {
+    closeButtons: [itemClose], canClose: () => !removing,
+    onClose: () => { selectedItem = undefined; itemPicture.replaceChildren(itemPlaceholder) },
+  })
+  listen(itemRemove, 'click', () => void removeItem())
   const scanner = createScanner({
     onScan: value => {
       if (!active) return
@@ -433,7 +446,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     }
   }
 
-  async function showImage(item, picture, placeholder, currentRequest) {
+  async function showImage(item, picture, placeholder, currentRequest, isCurrent = () => true) {
     try {
       let source = item.product_image
       // User photos are paths relative to the app's persistent data directory
@@ -441,21 +454,72 @@ export function mountCollectionScreen(container, { collection, isNative, databas
         const { uri } = await Filesystem.getUri({ directory: Directory.Data, path: item.item_image })
         source = Capacitor.convertFileSrc(uri)
       }
-      if (!active || currentRequest !== request || !source) return
+      if (!active || currentRequest !== request || !isCurrent() || !source) return
 
       const image = document.createElement('img')
       image.alt = ''
       image.decoding = 'async'
-      listen(image, 'load', () => { placeholder.hidden = true })
+      listen(image, 'load', () => { if (isCurrent()) placeholder.hidden = true })
       listen(image, 'error', () => {
         image.remove()
-        placeholder.hidden = false
+        if (isCurrent()) placeholder.hidden = false
       })
       picture.append(image)
       image.src = source
     } catch (imageError) {
       // Keep the placeholder when a stored photo cannot be resolved
       console.error('Could not load item image:', imageError)
+    }
+  }
+
+  function showItem(item) {
+    selectedItem = item
+    itemPicture.replaceChildren(itemPlaceholder)
+    itemPlaceholder.hidden = false
+    itemError.hidden = true
+    screen.querySelector('.item-detail-brand').textContent = item.brand
+    screen.querySelector('.item-detail-name').textContent = item.name
+    screen.querySelector('.item-detail-size').textContent = item.size ?? ''
+    screen.querySelector('.item-detail-size-row').hidden = item.size === null
+    itemPopup.open()
+    void showImage(item, itemPicture, itemPlaceholder, request, () => selectedItem === item && itemDialog.open)
+  }
+
+  async function removeItem() {
+    if (!selectedItem || removing || !active) return
+    const item = selectedItem
+    removing = true
+    itemRemove.disabled = itemClose.disabled = true
+    itemRemove.textContent = 'Removing…'
+    itemError.hidden = true
+    try {
+      const photo = await removeCollectionItem(collection.id, item.id)
+      // Delete the permanent copy only after the collection entry is removed.
+      let photoError = false
+      try { await deleteSavedItemPhoto(photo) } catch (failure) {
+        console.error('Could not delete removed item photo:', failure)
+        photoError = true
+      }
+      if (!active) return
+      removing = false
+      itemPopup.close()
+      if (collectionTotal !== undefined) collectionTotal = Math.max(0, collectionTotal - 1)
+      await loadItems()
+      if (active && photoError) {
+        error.textContent = 'Item removed, but its saved photo could not be deleted.'
+        error.hidden = false
+      }
+    } catch (failure) {
+      if (!active) return
+      console.error('Could not remove collection item:', failure)
+      itemError.textContent = 'Could not remove this item. Please try again.'
+      itemError.hidden = false
+    } finally {
+      removing = false
+      if (active) {
+        itemRemove.disabled = itemClose.disabled = false
+        itemRemove.textContent = 'Remove from collection'
+      }
     }
   }
 
@@ -482,6 +546,9 @@ export function mountCollectionScreen(container, { collection, isNative, databas
         const label = `${item.brand}: ${item.name}${item.size === null ? '' : `(${item.size})`}`
         const figure = card.querySelector('figure')
         figure.setAttribute('aria-label', label)
+        const open = card.querySelector('.item-open')
+        open.setAttribute('aria-label', `View ${label}`)
+        listen(open, 'click', () => showItem(item))
         const caption = card.querySelector('.item-label')
         caption.textContent = label
         caption.title = label
@@ -535,6 +602,7 @@ export function mountCollectionScreen(container, { collection, isNative, databas
     events.abort()
     void scanner.destroy()
     scanResultPopup.destroy()
+    itemPopup.destroy()
     screen.remove()
   }
 }

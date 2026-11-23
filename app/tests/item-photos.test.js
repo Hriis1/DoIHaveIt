@@ -50,13 +50,25 @@ mock.module('@capacitor/camera', { namedExports: {
     },
   },
 } })
-const { preparePhotoCache, selectItemPhoto, deleteTemporaryPhoto, saveItemPhoto, discardCameraResult } = await import('../src/modules/itemPhotos.js')
+const { preparePhotoCache, selectItemPhoto, deleteTemporaryPhoto, saveItemPhoto, discardCameraResult, deleteSavedItemPhoto } = await import('../src/modules/itemPhotos.js')
 
 function nativePhoto(name = 'camera.jpg') {
   files.set(`CACHE/${name}`, 'photo bytes')
   cameraResult = { uri: `/cache/${name}`, metadata: { format: 'jpg' } }
   cameraError = undefined
 }
+
+test('saved photo removal deletes only the app copy and rejects paths outside its folder', async () => {
+  files.set('DATA/item-photos/removed.jpg', 'copy')
+  files.set('file:///gallery/original.jpg', 'original')
+  await deleteSavedItemPhoto('item-photos/removed.jpg')
+  assert.equal(files.has('DATA/item-photos/removed.jpg'), false)
+  assert.equal(files.has('file:///gallery/original.jpg'), true)
+  await deleteSavedItemPhoto(null)
+  for (const path of ['file:///gallery/original.jpg', 'item-photos/../other.jpg', '../other.jpg']) {
+    await assert.rejects(deleteSavedItemPhoto(path), /Invalid saved item photo path/)
+  }
+})
 
 test('startup removes abandoned drafts, and camera capture stages a preview and removes the plugin copy', async () => {
   await preparePhotoCache()

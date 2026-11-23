@@ -15,7 +15,7 @@ const deferred = () => {
   return { promise, resolve, reject }
 }
 
-function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null }, inCollection = false } = {}) {
+function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null }, inCollection = false, items = [] } = {}) {
   const nodes = new Map()
   const node = selector => {
     if (!nodes.has(selector)) {
@@ -37,6 +37,7 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
         replaceChildren(...children) {
           this.children = children.length === 1 && children[0].isFragment ? children[0].children : children
         },
+        append(child) { this.children.push(child) },
         querySelector(child) { return child === '[role="option"]'
           ? this.children.find(option => option.getAttribute('role') === 'option') : node(`${selector} ${child}`) },
         querySelectorAll() { return this.children.filter(option => option.getAttribute('role') === 'option') },
@@ -51,6 +52,15 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
   const inserted = []
   const resolved = []
   const memberships = []
+  const removed = []
+  const deletedSaved = []
+  let remove = async (collectionId, itemId) => {
+    removed.push([collectionId, itemId])
+    const item = items.find(item => item.id === itemId)
+    items = items.filter(item => item.id !== itemId)
+    return item?.item_image ?? null
+  }
+  node('.item-template').content = { cloneNode: () => ({ querySelector: selector => node(`card ${selector}`) }) }
   let scan
   let lookup = async () => { throw new Error('AI lookup failed') }
   let resolveProduct = async (barcode, product, { signal }) => {
@@ -77,7 +87,11 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
     resolveAiProduct: (...args) => resolveProduct(...args),
     resolveProduct: (...args) => resolveProduct(...args),
     createScanner: options => { scan = options.onScan; return { destroy() {} } },
-    getCollectionItems: async () => ({ items: [], total: inserted.length, page: 1, totalPages: 1 }),
+    getCollectionItems: async () => ({ items, total: items.length + inserted.length, page: 1, totalPages: 1 }),
+    removeCollectionItem: (...args) => remove(...args),
+    deleteSavedItemPhoto: async path => { if (path) deletedSaved.push(path) },
+    Filesystem: { getUri: async ({ path }) => ({ uri: `file:///data/${path}` }) },
+    Directory: { Data: 'DATA' }, Capacitor: { convertFileSrc: uri => `web:${uri}` },
     addCollectionItem: async (...args) => { inserted.push(args) },
     selectItemPhoto: source => select(source),
     deleteTemporaryPhoto: async photo => { if (photo) deleted.push(photo) },
@@ -85,10 +99,11 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
   }
   runInNewContext(source + '\nthis.mount = mountCollectionScreen', context)
   const unmount = context.mount({ querySelector: () => ({ querySelector: node, remove() {} }) }, {
-    collection: { id: 3, name: 'Collection' }, isNative: false, databaseReady: Promise.resolve(), navigate() {},
+    collection: { id: 3, name: 'Collection' }, isNative: items.length > 0, databaseReady: Promise.resolve(), navigate() {},
   })
   return {
-    node, deleted, inserted, resolved, memberships, unmount,
+    node, deleted, inserted, resolved, memberships, unmount, removed, deletedSaved,
+    remove: callback => { remove = callback },
     scan: async (barcode = '123') => { scan(barcode); await settle() },
     ai: callback => { lookup = callback },
     resolve: callback => { resolveProduct = callback },
@@ -102,6 +117,56 @@ function popup({ product = { id: 7, name: 'Product', brand: 'Brand', size: null 
     result: (value, owned = false) => { product = value; inCollection = owned },
   }
 }
+
+test('item details show the saved image and fields, and dismissal does not remove anything', async () => {
+  const ui = popup({ items: [{ id: 8, brand: 'brand', name: 'name', size: '330 ml', item_image: 'item-photos/photo.jpg' }] })
+  await settle()
+  ui.node('card .item-open').emit()
+  await settle()
+  assert.equal(ui.node('.item-detail-dialog').open, true)
+  assert.equal(ui.node('.item-detail-brand').textContent, 'brand')
+  assert.equal(ui.node('.item-detail-name').textContent, 'name')
+  assert.equal(ui.node('.item-detail-size').textContent, '330 ml')
+  const image = ui.node('.item-detail-image').children.at(-1)
+  assert.equal(image.src, 'web:file:///data/item-photos/photo.jpg')
+  ui.node('.item-detail-close').emit()
+  assert.equal(ui.node('.item-detail-dialog').open, false)
+  assert.deepEqual(ui.removed, [])
+  assert.deepEqual(ui.deletedSaved, [])
+  ui.unmount()
+})
+
+test('removal is guarded, deletes only the selected item photo and refreshes the empty gallery', async () => {
+  const ui = popup({ items: [{ id: 8, brand: 'brand', name: 'name', size: null, item_image: 'item-photos/photo.jpg' }] })
+  await settle()
+  ui.node('card .item-open').emit()
+  assert.equal(ui.node('.item-detail-size-row').hidden, true)
+  ui.node('.item-detail-remove').emit()
+  ui.node('.item-detail-remove').emit()
+  ui.node('.item-detail-close').emit()
+  assert.equal(ui.node('.item-detail-dialog').open, true)
+  await settle()
+  assert.deepEqual(ui.removed, [[3, 8]])
+  assert.deepEqual(ui.deletedSaved, ['item-photos/photo.jpg'])
+  assert.equal(ui.node('.item-detail-dialog').open, false)
+  assert.equal(ui.node('.gallery-count').textContent, '0 items')
+  assert.equal(ui.node('.gallery-empty').hidden, false)
+  ui.unmount()
+})
+
+test('failed removal keeps the popup and photo available for retry', async () => {
+  const ui = popup({ items: [{ id: 8, brand: 'brand', name: 'name', size: null, item_image: 'item-photos/photo.jpg' }] })
+  ui.remove(async () => { throw new Error('Database unavailable') })
+  await settle()
+  ui.node('card .item-open').emit()
+  ui.node('.item-detail-remove').emit()
+  await settle()
+  assert.equal(ui.node('.item-detail-dialog').open, true)
+  assert.equal(ui.node('.item-detail-error').hidden, false)
+  assert.equal(ui.node('.item-detail-remove').disabled, false)
+  assert.deepEqual(ui.deletedSaved, [])
+  ui.unmount()
+})
 
 test('dropdowns load only when their arrow opens them, and toggle fully closed without blurring', async () => {
   const ui = popup({ product: null })

@@ -4,6 +4,7 @@ import { AuthError } from '../auth/errors.js'
 import { createSessionToken, hashPassword, hashSessionToken, verifyPassword } from '../auth/credentials.js'
 import { createAuthRepository } from '../repositories/authRepo.js'
 import { readSessionToken } from '../auth/session.js'
+import { deleteRevenueCatCustomer } from '../revenuecat.js'
 
 const sessionDuration = 30 * 24 * 60 * 60 * 1000
 const sqlDate = date => date.toISOString().slice(0, 19).replace('T', ' ')
@@ -12,7 +13,7 @@ const jsonResponse = (body, status = 200, headers = {}) => respond(JSON.stringif
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers },
 })
 
-async function readCredentials(request) {
+async function readCredentials(request, deleting = false) {
   let body
   const reader = request.body?.getReader()
   let length = 0
@@ -42,11 +43,11 @@ async function readCredentials(request) {
     throw new AuthError('Request body must be valid JSON.', 400)
   }
   if (!body || typeof body !== 'object' || Array.isArray(body)
-      || Object.keys(body).some(key => !['email', 'password'].includes(key))) {
-    throw new AuthError('Provide only email and password.', 400)
+      || Object.keys(body).some(key => !(deleting ? ['password'] : ['email', 'password']).includes(key))) {
+    throw new AuthError(deleting ? 'Provide only your password.' : 'Provide only email and password.', 400)
   }
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
-  if (email.length > 254 || /\p{C}/u.test(email) || !isEmail(email)) {
+  if (!deleting && (email.length > 254 || /\p{C}/u.test(email) || !isEmail(email))) {
     throw new AuthError('A valid email address is required.', 400)
   }
   if (typeof body.password !== 'string' || [...body.password].length < 8 || [...body.password].length > 128
@@ -100,6 +101,19 @@ export async function handleAuth(request, env, action) {
     }
     const user = await repository.getSessionUser(tokenHash, sqlDate(new Date()))
     if (!user) throw new AuthError('Your session has expired or is invalid. Please sign in again.', 401)
+    if (action === 'delete') {
+      if (!env.AUTH_RATE_LIMITER) throw new AuthError('Authentication rate limiter is not configured.', 503)
+      const { success } = await env.AUTH_RATE_LIMITER.limit({ key: request.headers.get('CF-Connecting-IP') ?? 'local' })
+      if (!success) return jsonResponse({ error: 'Too many attempts. Please try again later.' }, 429, { 'Retry-After': '60' })
+      const { password } = await readCredentials(request, true)
+      const record = await repository.getUserByEmail(user.email)
+      if (!record || record.id !== user.id || !verifyPassword(password, record.password_hash)) {
+        throw new AuthError('Password is incorrect.', 403)
+      }
+      await deleteRevenueCatCustomer(user.id, env.REVENUECAT_SECRET_API_KEY)
+      await repository.deleteUser(user.id)
+      return jsonResponse({ success: true })
+    }
     return jsonResponse({ user })
   } catch (error) {
     if (error instanceof AuthError) return jsonResponse({ error: error.message }, error.status)

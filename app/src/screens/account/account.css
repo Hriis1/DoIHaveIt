@@ -33,3 +33,24 @@
 .account-details > button {
   width: 100%;
 }
+
+.account-delete {
+  margin-top: 12px;
+}
+
+.account-delete-dialog {
+  inset: 0;
+  margin: auto;
+  width: min(420px, calc(100% - 40px));
+  height: fit-content;
+  border-radius: 20px;
+}
+
+.account-delete-dialog input {
+  min-height: 48px;
+  padding: 12px;
+}
+
+.account-delete-status {
+  color: var(--muted);
+}

@@ -13,7 +13,7 @@ export default {
     if (url.pathname === '/purchases/status') return handlePurchaseStatus(request, env)
 
     //Auth routes
-    const auth = url.pathname.match(/^\/auth\/(register|login|me|logout)$/)
+    const auth = url.pathname.match(/^\/auth\/(register|login|me|logout|delete)$/)
     if (auth) return handleAuth(request, env, auth[1])
 
     //Product look up route

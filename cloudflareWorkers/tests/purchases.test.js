@@ -6,7 +6,7 @@ import { authFixture, credentials } from './auth-fixture.js'
 const purchaseSchema = `
   CREATE TABLE purchases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     store TEXT NOT NULL,
     environment TEXT NOT NULL CHECK (environment IN ('PRODUCTION', 'SANDBOX')),
     transaction_id TEXT NOT NULL,

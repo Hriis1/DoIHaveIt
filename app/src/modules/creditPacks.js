@@ -10,6 +10,7 @@ export function createCreditPacks({ purchases = Purchases, capacitor = Capacitor
   let currentUserId
   let pending = Promise.resolve()
   let buying = false
+  let deletingUserId
   const packages = new Map()
   const confirmations = new Map()
 
@@ -53,6 +54,7 @@ export function createCreditPacks({ purchases = Purchases, capacitor = Capacitor
       if (confirmations.get(String(userId)) === transactionId) confirmations.delete(String(userId))
     },
     async purchaseCreditPack(userId, identifier) {
+      if (deletingUserId) throw new Error('Account deletion is in progress.')
       if (buying) throw new Error('A purchase is already in progress.')
       if (confirmations.has(String(userId))) throw new Error('Confirm your previous purchase before buying another pack.')
       buying = true
@@ -76,12 +78,36 @@ export function createCreditPacks({ purchases = Purchases, capacitor = Capacitor
       try { return await result } finally { buying = false }
     },
     getCreditPacks(userId) {
+      if (deletingUserId) return Promise.reject(new Error('Account deletion is in progress.'))
       // Serialize initialization across screen changes and allow retries after failures.
       const result = pending.then(() => load(userId))
       pending = result.catch(() => {})
       return result
     },
+    async prepareCreditPacksForDeletion(userId) {
+      if (buying || deletingUserId) throw new Error('Please wait for the current purchase operation to finish.')
+      const id = String(userId)
+      deletingUserId = id
+      try {
+        await pending
+        // Detach before server deletion so the SDK cannot refresh the deleted customer.
+        if (configured && currentUserId === id) {
+          await purchases.logOut()
+          currentUserId = undefined
+        }
+        return deleted => {
+          if (deleted) {
+            packages.clear()
+            confirmations.delete(id)
+          }
+          deletingUserId = undefined
+        }
+      } catch {
+        deletingUserId = undefined
+        throw new Error('Could not prepare purchase-account cleanup. Please try again.')
+      }
+    },
   }
 }
 
-export const { getCreditPacks, purchaseCreditPack, isPurchasing, getPendingPurchase, clearPendingPurchase } = createCreditPacks()
+export const { getCreditPacks, purchaseCreditPack, isPurchasing, getPendingPurchase, clearPendingPurchase, prepareCreditPacksForDeletion } = createCreditPacks()

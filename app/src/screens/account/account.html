@@ -10,5 +10,21 @@
       <dd class="account-balance"></dd>
     </dl>
     <button class="primary-button" type="button">Add credit</button>
+    <button class="danger-button account-delete" type="button">Delete account</button>
   </div>
+  <dialog class="account-delete-dialog" aria-labelledby="account-delete-title" aria-describedby="account-delete-description">
+    <form class="sheet account-delete-form">
+      <button class="popup-close account-delete-close" type="button" aria-label="Close account deletion"><svg aria-hidden="true"><use href="#icon-close" /></svg></button>
+      <h2 id="account-delete-title">Delete account?</h2>
+      <p id="account-delete-description">Your account, purchase records, and unused credits will be permanently deleted. Collections, photos, and personal API keys stay on this phone.</p>
+      <label for="account-delete-password">Confirm your password</label>
+      <input id="account-delete-password" type="password" autocomplete="current-password" required>
+      <p class="error account-delete-error" role="alert" hidden></p>
+      <p class="account-delete-status" role="status" hidden>Deleting account…</p>
+      <div class="sheet-actions">
+        <button class="secondary-button account-delete-cancel" type="button">Cancel</button>
+        <button class="danger-button account-delete-confirm" type="submit">Delete account</button>
+      </div>
+    </form>
+  </dialog>
 </section>

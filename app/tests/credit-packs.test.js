@@ -12,6 +12,7 @@ function setup({ platform = 'android', configure = async () => {}, getOfferings,
     purchases: {
       configure: async options => { calls.push(['configure', options]); await configure() },
       logIn: async options => { calls.push(['login', options]) },
+      logOut: async () => { calls.push(['logout']) },
       purchasePackage: async options => { calls.push(['purchase', options]); return purchasePackage(options) },
       getOfferings: getOfferings ?? (async () => ({ current: { availablePackages: [
         { identifier: 'credits_600', product: { priceString: '4,99 €' } },
@@ -100,5 +101,31 @@ test('unsupported platforms and absent accounts never initialize purchases', asy
   assert.deepEqual(browser.calls, [])
   const store = setup()
   await assert.rejects(store.getCreditPacks(null), /Log in/)
+  assert.deepEqual(store.calls, [])
+})
+
+test('deletion detaches RevenueCat before server cleanup and clears purchase state only on success', async () => {
+  const store = setup()
+  await store.getCreditPacks(12)
+  await store.purchaseCreditPack(12, 'credits_100')
+  const finish = await store.prepareCreditPacksForDeletion(12)
+  assert.deepEqual(store.calls.at(-1), ['logout'])
+  assert.equal(store.getPendingPurchase(12), 'order1')
+  await assert.rejects(store.getCreditPacks(12), /deletion is in progress/)
+  await assert.rejects(store.purchaseCreditPack(12, 'credits_100'), /deletion is in progress/)
+  finish(false)
+  assert.equal(store.getPendingPurchase(12), 'order1')
+  await store.getCreditPacks(12)
+  assert.deepEqual(store.calls.at(-1), ['login', { appUserID: '12' }])
+  const complete = await store.prepareCreditPacksForDeletion(12)
+  complete(true)
+  assert.equal(store.getPendingPurchase(12), undefined)
+  await assert.rejects(store.purchaseCreditPack(12, 'credits_100'), /Reload/)
+})
+
+test('users who never initialized RevenueCat need no SDK logout', async () => {
+  const store = setup()
+  const finish = await store.prepareCreditPacksForDeletion(12)
+  finish(true)
   assert.deepEqual(store.calls, [])
 })

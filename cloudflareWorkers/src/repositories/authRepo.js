@@ -41,5 +41,14 @@ export function createAuthRepository(database) {
     deleteSession: tokenHash => database.prepare(`
       DELETE FROM sessions WHERE token_hash = ?;
     `).bind(tokenHash).run(),
+
+    async deleteUser(userId) {
+      // Remove the wallet and all dependent records together, including on other devices.
+      await database.batch([
+        database.prepare('DELETE FROM purchases WHERE user_id = ?;').bind(userId),
+        database.prepare('DELETE FROM sessions WHERE user_id = ?;').bind(userId),
+        database.prepare('DELETE FROM users WHERE id = ?;').bind(userId),
+      ])
+    },
   }
 }

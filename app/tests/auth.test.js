@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict'
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import { createAuthApi, AuthRequestError } from '../src/modules/authApi.js'
-import { createAuth } from '../src/modules/auth.js'
 import { createSessionStorage } from '../src/modules/sessionStorage.js'
 import { validateCredentials } from '../src/modules/authValidation.js'
 import { KeychainAccess } from '@aparajita/capacitor-secure-storage'
+
+mock.module('@revenuecat/purchases-capacitor', { namedExports: { Purchases: {} } })
+const { createAuth } = await import('../src/modules/auth.js')
 
 const user = { id: 4, email: 'user@example.com', credits: 12 }
 const token = 'a'.repeat(64)
@@ -63,7 +65,7 @@ test('auth API aborts pending requests and does not expose transport errors', as
   await assert.rejects(createAuthApi(async () => { throw new Error('secret transport details') })('me', { token }), /Could not connect/)
 })
 
-function fixture(api = async () => ({ user, token })) {
+function fixture(api = async () => ({ user, token }), preparePurchases = async () => () => {}) {
   let cached = null
   let savedToken = null
   const tokens = { getSessionToken: async () => savedToken, saveSessionToken: async value => { savedToken = value },
@@ -71,7 +73,7 @@ function fixture(api = async () => ({ user, token })) {
   const users = { getCurrentUser: async () => cached, saveCurrentUser: async value => { cached = value },
     updateCurrentUserCredits: async (id, credits) => { if (cached?.id === id) cached = { ...cached, credits } },
     deleteCurrentUser: async () => { cached = null } }
-  return { auth: createAuth({ api, tokens, users, isNative: true }), tokens, users,
+  return { auth: createAuth({ api, tokens, users, preparePurchases, isNative: true }), tokens, users,
     get cached() { return cached }, get token() { return savedToken } }
 }
 
@@ -199,4 +201,99 @@ test('session storage survives native JS instances and disables sync and migrati
   await memory.saveSessionToken(token)
   assert.equal(await memory.getSessionToken(), token)
   assert.equal(await createSessionStorage(web, storage).getSessionToken(), null)
+})
+
+test('delete API sends only a password and requires an explicit success response', async () => {
+  let sent
+  let response = Response.json({ success: true })
+  const api = createAuthApi(async (url, options) => { sent = { url, ...options }; return response })
+  assert.deepEqual(await api('delete', { token, credentials }), { success: true })
+  assert.ok(sent.url.endsWith('/auth/delete'))
+  assert.deepEqual(JSON.parse(sent.body), { password: credentials.password })
+  assert.equal(sent.headers.Authorization, `Bearer ${token}`)
+  response = Response.json({})
+  await assert.rejects(api('delete', { token, credentials }), /did not confirm/)
+  response = Response.json({ error: 'Password is incorrect.' }, { status: 403 })
+  await assert.rejects(api('delete', { token, credentials }), error => error.status === 403)
+})
+
+test('account deletion clears only login state after server confirmation and notifies the badge', async () => {
+  const calls = []
+  const f = fixture(async (action, options) => {
+    calls.push([action, options])
+    return action === 'delete' ? { success: true } : { user, token }
+  }, async id => { calls.push(['prepare', id]); return deleted => calls.push(['finish', deleted]) })
+  await f.auth.signIn('login', credentials)
+  const changes = []
+  f.auth.subscribeCreditBalance(value => changes.push(value))
+  await f.auth.deleteAccount(credentials.password)
+  assert.equal(f.cached, null)
+  assert.equal(f.token, null)
+  assert.deepEqual(changes, [null])
+  assert.deepEqual(calls[1], ['prepare', user.id])
+  assert.deepEqual(calls[2], ['delete', { token, credentials: { password: credentials.password } }])
+  assert.deepEqual(calls[3], ['finish', true])
+  await f.auth.signIn('register', credentials)
+  assert.deepEqual(await f.auth.getCurrentUser(), user)
+})
+
+test('failed deletion retains the login and releases purchase locking for retry', async () => {
+  let fail = true
+  const finished = []
+  const f = fixture(async action => {
+    if (action === 'delete') {
+      if (fail) throw new Error('Cleanup failed')
+      return { success: true }
+    }
+    return { user, token }
+  }, async () => deleted => finished.push(deleted))
+  await f.auth.signIn('login', credentials)
+  await assert.rejects(f.auth.deleteAccount(''), /Enter your password/)
+  await assert.rejects(f.auth.deleteAccount(credentials.password), /Cleanup failed/)
+  assert.deepEqual(f.cached, user)
+  assert.equal(f.token, token)
+  assert.deepEqual(finished, [false])
+  fail = false
+  await f.auth.deleteAccount(credentials.password)
+  assert.deepEqual(finished, [false, true])
+})
+
+test('phone cleanup failures can be retried without calling the deleted server account again', async () => {
+  let remoteCalls = 0
+  const f = fixture(async action => {
+    if (action === 'delete') { remoteCalls++; return { success: true } }
+    return { user, token }
+  })
+  await f.auth.signIn('login', credentials)
+  const removeToken = f.tokens.deleteSessionToken
+  f.tokens.deleteSessionToken = async () => { throw new Error('Storage unavailable') }
+  await assert.rejects(f.auth.deleteAccount(credentials.password), /phone cleanup failed/)
+  assert.equal(await f.auth.getCurrentUser(), null)
+  assert.equal(f.cached, null)
+  f.tokens.deleteSessionToken = removeToken
+  await f.auth.deleteAccount(credentials.password)
+  assert.equal(remoteCalls, 1)
+  assert.equal(f.token, null)
+})
+
+test('duplicate deletion and late balance refresh cannot resurrect the deleted wallet', async () => {
+  let finishDelete
+  let finishRefresh
+  const f = fixture(async action => {
+    if (action === 'delete') return new Promise(resolve => { finishDelete = resolve })
+    if (action === 'me') return new Promise(resolve => { finishRefresh = resolve })
+    return { user, token }
+  })
+  await f.auth.signIn('login', credentials)
+  const refreshing = f.auth.refreshCredits()
+  await new Promise(resolve => setImmediate(resolve))
+  const deleting = f.auth.deleteAccount(credentials.password)
+  await new Promise(resolve => setImmediate(resolve))
+  await assert.rejects(f.auth.deleteAccount(credentials.password), /already in progress/)
+  finishDelete({ success: true })
+  await deleting
+  finishRefresh({ user: { ...user, credits: 900 } })
+  await refreshing
+  assert.equal(f.cached, null)
+  assert.equal(f.token, null)
 })

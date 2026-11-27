@@ -19,7 +19,8 @@ export function createAuthApi(request = fetch) {
         method: action === 'me' ? 'GET' : 'POST',
         headers: { ...(credentials ? { 'Content-Type': 'application/json' } : {}),
           ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        ...(credentials ? { body: JSON.stringify({ email: credentials.email, password: credentials.password }) } : {}),
+        ...(credentials ? { body: JSON.stringify(action === 'delete' ? { password: credentials.password }
+          : { email: credentials.email, password: credentials.password }) } : {}),
         signal: controller.signal,
       })
       let result
@@ -29,6 +30,11 @@ export function createAuthApi(request = fetch) {
       if (!response.ok) throw new AuthRequestError(
         typeof result?.error === 'string' && result.error.trim() ? result.error : 'Authentication failed. Please try again.', response.status
       )
+      signal?.throwIfAborted()
+      if (action === 'delete') {
+        if (result?.success !== true) throw new AuthRequestError('The server did not confirm account deletion. Please try again.')
+        return { success: true }
+      }
       const user = result?.user
       if (!user || !Number.isSafeInteger(user.id) || user.id <= 0 || typeof user.email !== 'string' || !user.email.trim()
           || !Number.isSafeInteger(user.credits) || user.credits < 0
